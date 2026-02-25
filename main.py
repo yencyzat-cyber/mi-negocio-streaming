@@ -14,10 +14,9 @@ INV_FILE = "inventario_yt.csv"
 def cargar_datos():
     if os.path.exists(VENTAS_FILE):
         df = pd.read_csv(VENTAS_FILE)
-        # Convertir a fecha y manejar errores
         df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce').dt.date
     else:
-        df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Detalles", "Vencimiento"])
+        df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
     
     if os.path.exists(INV_FILE):
         inv = pd.read_csv(INV_FILE)
@@ -27,35 +26,54 @@ def cargar_datos():
 
 df_ventas, df_inv = cargar_datos()
 
-# --- LÓGICA DEL POP-UP (DEFINICIÓN) ---
+# --- DIÁLOGO DE CONFIRMACIÓN PARA ELIMINAR ---
+@st.dialog("¿Eliminar Venta?")
+def confirmar_eliminar(index, nombre):
+    st.warning(f"¿Estás seguro de que deseas finalizar la venta de **{nombre}**? Esta acción no se puede deshacer.")
+    if st.button("SÍ, ELIMINAR DEFINITIVAMENTE", type="primary"):
+        df_final = df_ventas.drop(index)
+        df_final.to_csv(VENTAS_FILE, index=False)
+        st.success("Venta eliminada correctamente.")
+        st.rerun()
+
+# --- DIÁLOGO DE NUEVA VENTA (ESTRUCTURADO) ---
 @st.dialog("Registrar Nueva Venta")
 def nueva_venta_popup():
     col1, col2 = st.columns(2)
     with col1:
-        prod = st.selectbox("Plataforma", ["YouTube Premium", "Netflix", "Disney+", "Google One", "HBO Max"])
+        prod = st.selectbox("Plataforma", ["YouTube Premium", "Netflix", "Disney+", "Google One", "HBO Max", "Prime Video"])
         nom = st.text_input("Nombre Cliente")
         tel = st.text_input("WhatsApp (ej: 51999888777)")
     with col2:
         f_ini = st.date_input("Inicio", datetime.now())
         venc = f_ini + timedelta(days=30)
-        
-        detalles_final = ""
-        if prod == "YouTube Premium" and not df_inv.empty:
-            # Seleccionar el correo con menos usos
-            sugerido = df_inv.sort_values(by="Usos").iloc[0]
-            detalles_final = f"Cuenta: {sugerido['Correo']} | Clave: {sugerido['Password']}"
-            st.info(f"Sugerido: {sugerido['Correo']}")
-        else:
-            detalles_final = st.text_area("Datos de la cuenta (Correo/Pass/Perfil)")
 
-    if st.button("CONFIRMAR Y GUARDAR"):
-        if nom and tel:
-            nueva = pd.DataFrame([[ "🟢 ACTIVO", nom, tel, prod, detalles_final, venc ]], 
-                                 columns=["Estado", "Cliente", "WhatsApp", "Producto", "Detalles", "Vencimiento"])
+    st.divider()
+    st.subheader("Datos de Acceso")
+    
+    c_mail, c_pass = st.columns(2)
+    c_perf, c_pin = st.columns(2)
+
+    # Lógica Automática para YouTube
+    if prod == "YouTube Premium" and not df_inv.empty:
+        sugerido = df_inv.sort_values(by="Usos").iloc[0]
+        mail_val = c_mail.text_input("Correo", value=sugerido['Correo'])
+        pass_val = c_pass.text_input("Contraseña", value=sugerido['Password'])
+        perf_val = c_perf.text_input("Perfil", value="N/A", disabled=True)
+        pin_val = c_pin.text_input("PIN", value="N/A", disabled=True)
+    else:
+        mail_val = c_mail.text_input("Correo")
+        pass_val = c_pass.text_input("Contraseña")
+        perf_val = c_perf.text_input("Perfil (Ej: Perfil 3)")
+        pin_val = c_pin.text_input("PIN (Ej: 1234)")
+
+    if st.button("CONFIRMAR Y GUARDAR VENTA", use_container_width=True, type="primary"):
+        if nom and tel and mail_val:
+            nueva = pd.DataFrame([[ "🟢 ACTIVO", nom, tel, prod, mail_val, pass_val, perf_val, pin_val, venc ]], 
+                                 columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
             df_actualizado = pd.concat([df_ventas, nueva], ignore_index=True)
             df_actualizado.to_csv(VENTAS_FILE, index=False)
             
-            # Sumar uso si es YouTube
             if prod == "YouTube Premium" and not df_inv.empty:
                 idx = df_inv.sort_values(by="Usos").index[0]
                 df_inv.at[idx, 'Usos'] += 1
@@ -64,69 +82,50 @@ def nueva_venta_popup():
             st.success("¡Venta Guardada!")
             st.rerun()
         else:
-            st.error("Por favor llena Nombre y WhatsApp")
+            st.error("Faltan datos obligatorios (Nombre, WhatsApp, Correo)")
 
-# --- INTERFAZ ---
-st.title("🚀 NEXA-Stream: Control Total")
+# --- INTERFAZ PRINCIPAL ---
+st.title("🚀 NEXA-Stream Manager")
+t1, t2 = st.tabs(["📊 Ventas", "📦 Inventario YT"])
 
-tabs = st.tabs(["📊 Administración General", "📦 Inventario YouTube"])
-
-# --- PESTAÑA 2: INVENTARIO ---
-with tabs[1]:
-    st.subheader("Gestión de Correos Gmail")
-    with st.expander("➕ Agregar Correo Nuevo"):
+with t2:
+    st.subheader("Configuración de Gmails para YouTube")
+    with st.expander("➕ Agregar Correo a Rotación"):
         c1, c2 = st.columns(2)
-        new_mail = c1.text_input("Correo Gmail")
-        new_pass = c2.text_input("Contraseña")
-        if st.button("Registrar en Inventario"):
-            nuevo_item = pd.DataFrame([[new_mail, new_pass, 0]], columns=["Correo", "Password", "Usos"])
-            df_inv_new = pd.concat([df_inv, nuevo_item], ignore_index=True)
-            df_inv_new.to_csv(INV_FILE, index=False)
-            st.success("Correo agregado!")
+        m = c1.text_input("Nuevo Gmail")
+        p = c2.text_input("Nueva Clave")
+        if st.button("Guardar en Inventario"):
+            ni = pd.DataFrame([[m, p, 0]], columns=["Correo", "Password", "Usos"])
+            df_inv = pd.concat([df_inv, ni], ignore_index=True)
+            df_inv.to_csv(INV_FILE, index=False)
             st.rerun()
-
     st.dataframe(df_inv, use_container_width=True)
 
-# --- PESTAÑA 1: ADMINISTRACIÓN ---
-with tabs[0]:
-    # El botón ahora dispara el diálogo directamente
-    if st.button("➕ NUEVA VENTA (Abrir Formulario)", type="primary"):
+with t1:
+    if st.button("➕ NUEVA VENTA", type="primary"):
         nueva_venta_popup()
 
     st.divider()
     hoy = datetime.now().date()
     
     if not df_ventas.empty:
-        # Re-calcular estados antes de mostrar
-        def get_status(v):
-            if pd.isna(v): return "⚪ SIN FECHA"
-            d = (v - hoy).days
-            if d <= 0: return "🔴 VENCIDO"
-            if d <= 3: return "🟠 COBRAR"
-            return "🟢 ACTIVO"
-
-        df_ventas['Estado'] = df_ventas['Vencimiento'].apply(get_status)
-        df_display = df_ventas.sort_values(by="Vencimiento")
-
-        for index, row in df_display.iterrows():
+        df_ventas['Vencimiento'] = pd.to_datetime(df_ventas['Vencimiento']).dt.date
+        for index, row in df_ventas.sort_values(by="Vencimiento").iterrows():
+            dias = (row['Vencimiento'] - hoy).days
+            color = "🔴" if dias <= 0 else "🟠" if dias <= 3 else "🟢"
+            
             with st.container(border=True):
-                c1, c2, c3, c4 = st.columns([1, 3, 1, 1])
+                col_info, col_btn = st.columns([4, 1])
+                with col_info:
+                    st.write(f"{color} **{row['Cliente']}** | {row['Producto']} (Vence: {row['Vencimiento']})")
+                    st.caption(f"📧 {row['Correo']} | 🔑 {row['Pass']} | 👤 {row['Perfil']} | 📍 PIN: {row['PIN']}")
                 
-                c1.subheader(row['Estado'])
-                c2.write(f"👤 **{row['Cliente']}** | 📺 {row['Producto']}")
-                c2.write(f"🔑 {row['Detalles']}")
-                c2.write(f"📅 Vence: {row['Vencimiento']}")
-                
-                # Botón WhatsApp
-                msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%20¿Renovamos?"
-                link = f"https://wa.me/{row['WhatsApp']}?text={msj}"
-                c3.markdown(f"[📲 Cobrar]({link})")
-                
-                # BOTÓN FINALIZAR (Borrar)
-                if c4.button("🗑️ Finalizar", key=f"del_{index}"):
-                    df_final = df_ventas.drop(index)
-                    df_final.to_csv(VENTAS_FILE, index=False)
-                    st.warning(f"Venta de {row['Cliente']} eliminada.")
-                    st.rerun()
+                with col_btn:
+                    # Link WhatsApp
+                    msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%20¿Renovamos?"
+                    st.markdown(f"[📲 Cobrar](https://wa.me/{row['WhatsApp']}?text={msj})")
+                    # Botón Finalizar con confirmación
+                    if st.button("🗑️", key=f"del_{index}"):
+                        confirmar_eliminar(index, row['Cliente'])
     else:
-        st.info("No hay ventas registradas. Usa el botón de arriba para empezar.")
+        st.info("Sin ventas activas.")
