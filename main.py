@@ -103,7 +103,7 @@ def nueva_venta_popup():
             df_inv.to_csv(INV_FILE, index=False)
         st.rerun()
 
-# --- INTERFAZ ---
+# --- INTERFAZ PRINCIPAL ---
 st.title("🚀 NEXA-Stream Manager")
 t1, t2 = st.tabs(["📊 Ventas", "⚙️ Config / Inv"])
 
@@ -130,5 +130,57 @@ with t1:
     else: st.info("Sin ventas.")
 
 with t2:
-    st.info("Aquí puedes gestionar tus plataformas y correos de YouTube.")
-    # (El código de Inventario y Plataformas iría aquí igual que el anterior)
+    st.warning("⚠️ Recuerda descargar tus Backups regularmente para no perder datos si el servidor se reinicia.")
+    b1, b2 = st.columns(2)
+    csv_ventas = df_ventas.to_csv(index=False).encode('utf-8')
+    csv_inv = df_inv.to_csv(index=False).encode('utf-8')
+    b1.download_button("📥 Descargar Backup Ventas", data=csv_ventas, file_name="backup_ventas.csv", mime="text/csv")
+    b2.download_button("📥 Descargar Backup Inventario", data=csv_inv, file_name="backup_inventario.csv", mime="text/csv")
+    
+    st.divider()
+    col_inv, col_plat = st.columns([2, 1])
+    
+    with col_plat:
+        st.subheader("🛠 Plataformas")
+        nueva_p = st.text_input("Agregar Plataforma")
+        if st.button("Añadir"):
+            if nueva_p and nueva_p not in lista_plataformas:
+                lista_plataformas.append(nueva_p)
+                pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
+                st.rerun()
+        for p in lista_plataformas:
+            cp1, cp2 = st.columns([3, 1])
+            cp1.write(p)
+            if cp2.button("🗑️", key=f"del_p_{p}"):
+                lista_plataformas.remove(p)
+                pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
+                st.rerun()
+
+    with col_inv:
+        st.subheader("📦 Inventario YouTube")
+        if st.button("➕ AGREGAR CORREO YT"):
+            @st.dialog("Nuevo Gmail")
+            def add_yt():
+                m, p = st.text_input("Gmail"), st.text_input("Clave")
+                u = st.selectbox("Usos iniciales", [0,1,2])
+                if st.button("GUARDAR"):
+                    ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
+                    pd.concat([df_inv, ni], ignore_index=True).to_csv(INV_FILE, index=False); st.rerun()
+            add_yt()
+            
+        for idx, row in df_inv.iterrows():
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([4, 0.5, 0.5])
+                c1.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
+                c1.caption(f"👤 Asignado: {row['Asignado_A']}")
+                if c2.button("📝", key=f"ed_i_{idx}"):
+                    @st.dialog("Editar")
+                    def edit_inv():
+                        nu = st.selectbox("Usos", [0,1,2], index=int(row['Usos']))
+                        na = st.text_input("Asignado a", value=row['Asignado_A'])
+                        if st.button("GUARDAR"):
+                            df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
+                            df_inv.to_csv(INV_FILE, index=False); st.rerun()
+                    edit_inv()
+                if c3.button("🗑️", key=f"del_i_{idx}"):
+                    df_inv.drop(idx).to_csv(INV_FILE, index=False); st.rerun()
