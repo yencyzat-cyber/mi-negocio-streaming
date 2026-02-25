@@ -3,14 +3,16 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="NEXA-Stream Pro", layout="wide")
 
-# Estilo CSS para mejorar la estética de los botones y entradas
 st.markdown("""
     <style>
-    .stButton>button { width: 100%; border-radius: 20px; }
-    .stTextInput>div>div>input { border-radius: 10px; }
+    /* Redondear botones y campos */
+    .stButton>button { border-radius: 20px; height: 38px; }
+    .stTextInput>div>div>input { border-radius: 10px; height: 38px; }
+    /* Ajustar margen superior de la búsqueda para alinear con el botón */
+    [data-testid="stVerticalBlock"] > div:nth-child(1) > div > div { align-items: center; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -24,7 +26,6 @@ def cargar_datos():
         df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce').dt.date
     else:
         df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
-    
     if os.path.exists(INV_FILE):
         inv = pd.read_csv(INV_FILE)
     else:
@@ -34,9 +35,9 @@ def cargar_datos():
 df_ventas, df_inv = cargar_datos()
 
 # --- DIÁLOGOS ---
-@st.dialog("¿Finalizar Venta?")
+@st.dialog("Confirmar Finalización")
 def confirmar_eliminar(index, nombre):
-    st.write(f"¿Estás seguro de que deseas eliminar la suscripción de **{nombre}**?")
+    st.write(f"¿Deseas eliminar la suscripción de **{nombre}**?")
     c1, c2 = st.columns(2)
     if c1.button("SÍ, ELIMINAR", type="primary"):
         df_final = df_ventas.drop(index)
@@ -55,59 +56,59 @@ def nueva_venta_popup():
     tel = st.text_input("WhatsApp (ej: 51999888777)")
     
     st.divider()
-    st.write("🔑 **Datos de Acceso**")
+    st.markdown("### 🔑 Datos de Acceso")
     
+    # Grid de datos para evitar el cuadro de texto grande
     col_a, col_b = st.columns(2)
     col_c, col_d = st.columns(2)
     
     venc = f_ini + timedelta(days=30)
 
-    # Lógica de Inventario YT
     if prod == "YouTube Premium" and not df_inv.empty:
         disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
         if not disponibles.empty:
             sug = disponibles.iloc[0]
-            mail_val = col_a.text_input("Correo", value=sug['Correo'])
-            pass_val = col_b.text_input("Contraseña", value=sug['Password'])
+            m_val = col_a.text_input("Correo", value=sug['Correo'])
+            p_val = col_b.text_input("Contraseña", value=sug['Password'])
         else:
-            st.error("No hay correos con cupos!")
-            mail_val = col_a.text_input("Correo")
-            pass_val = col_b.text_input("Contraseña")
+            st.error("No hay correos disponibles")
+            m_val = col_a.text_input("Correo")
+            p_val = col_b.text_input("Contraseña")
         perf_val = col_c.text_input("Perfil", value="N/A", disabled=True)
         pin_val = col_d.text_input("PIN", value="N/A", disabled=True)
     else:
-        mail_val = col_a.text_input("Correo")
-        pass_val = col_b.text_input("Contraseña")
+        m_val = col_a.text_input("Correo")
+        p_val = col_b.text_input("Contraseña")
         perf_val = col_c.text_input("Perfil")
         pin_val = col_d.text_input("PIN")
 
-    if st.button("GUARDAR VENTA", type="primary"):
-        if nom and tel and mail_val:
-            nueva = pd.DataFrame([[ "🟢", nom, tel, prod, mail_val, pass_val, perf_val, pin_val, venc ]], 
+    if st.button("CONFIRMAR Y GUARDAR VENTA", type="primary", use_container_width=True):
+        if nom and tel and m_val:
+            nueva = pd.DataFrame([[ "🟢", nom, tel, prod, m_val, p_val, perf_val, pin_val, venc ]], 
                                  columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
             pd.concat([df_ventas, nueva], ignore_index=True).to_csv(VENTAS_FILE, index=False)
             
             if prod == "YouTube Premium" and not df_inv.empty:
-                idx = df_inv[df_inv['Correo'] == mail_val].index[0]
+                idx = df_inv[df_inv['Correo'] == m_val].index[0]
                 df_inv.at[idx, 'Usos'] += 1
                 df_inv.to_csv(INV_FILE, index=False)
             st.rerun()
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("🚀 NEXA-Stream Manager")
-
 t1, t2 = st.tabs(["📊 Administración", "📦 Inventario YT"])
 
 with t1:
-    # CABECERA ORGANIZADA: Botón Izquierda, Buscador Derecha
-    head_col1, head_col2 = st.columns([1, 2])
+    # CABECERA EN UNA SOLA LÍNEA
+    head_col1, head_col2, head_col3 = st.columns([1, 1.5, 0.5])
     
     with head_col1:
         if st.button("➕ NUEVA VENTA", type="primary"):
             nueva_venta_popup()
             
     with head_col2:
-        search = st.text_input("", placeholder="🔍 Buscar cliente o cuenta...")
+        # Buscador pequeño y alineado
+        search = st.text_input("", placeholder="🔍 Buscar...", label_visibility="collapsed")
 
     st.divider()
     
