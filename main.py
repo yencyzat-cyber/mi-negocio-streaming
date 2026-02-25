@@ -8,19 +8,34 @@ from dateutil.relativedelta import relativedelta
 # --- CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="NEXA-Stream Pro", layout="wide")
 
+# Arreglo visual para alinear perfectamente los botones
 st.markdown("""
     <style>
-    .stButton>button { border-radius: 15px; height: 32px; width: 100%; font-size: 12px; }
+    .stButton>button { 
+        border-radius: 12px; 
+        height: 32px; 
+        width: 100%; 
+        font-size: 12px; 
+        padding: 0; 
+    }
     .wa-button { 
-        background-color: #25D366; color: white; padding: 4px 10px; 
-        border-radius: 12px; text-decoration: none; font-weight: bold;
-        display: inline-block; text-align: center; width: 100%; font-size: 11px;
+        background-color: #25D366; 
+        color: white; 
+        border-radius: 12px; 
+        text-decoration: none; 
+        font-weight: bold;
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        width: 100%; 
+        height: 32px; 
+        font-size: 12px;
     }
     .stTextInput>div>div>input { border-radius: 8px; height: 32px; }
     </style>
     """, unsafe_allow_html=True)
 
-# ARCHIVOS DE DATOS
+# --- ARCHIVOS DE DATOS LOCALES ---
 VENTAS_FILE = "ventas_data.csv"
 INV_FILE = "inventario_yt.csv"
 PLAT_FILE = "plataformas.csv"
@@ -31,15 +46,18 @@ def cargar_datos():
         df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce').dt.date
     else:
         df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
+        
     if os.path.exists(INV_FILE):
         inv = pd.read_csv(INV_FILE)
     else:
         inv = pd.DataFrame(columns=["Correo", "Password", "Usos", "Asignado_A"])
+        
     if os.path.exists(PLAT_FILE):
         plat = pd.read_csv(PLAT_FILE)['Nombre'].tolist()
     else:
         plat = ["YouTube Premium", "Netflix", "Disney+", "Google One", "Spotify"]
         pd.DataFrame(plat, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
+        
     return df, inv, plat
 
 df_ventas, df_inv, lista_plataformas = cargar_datos()
@@ -84,6 +102,7 @@ def nueva_venta_popup():
     else: venc = st.date_input("Fecha Final", f_ini + timedelta(days=30))
     st.divider()
     ca, cb = st.columns(2); cc, cd = st.columns(2)
+    
     if prod == "YouTube Premium" and not df_inv.empty:
         disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
         if not disponibles.empty:
@@ -93,6 +112,7 @@ def nueva_venta_popup():
         perf_v, pin_v = "N/A", "N/A"
     else:
         mv, pv, perf_v, pin_v = ca.text_input("Correo"), cb.text_input("Clave"), cc.text_input("Perfil"), cd.text_input("PIN")
+        
     if st.button("GUARDAR VENTA", type="primary"):
         nueva = pd.DataFrame([[ "🟢", nom, limpiar_whatsapp(tel), prod, mv, pv, perf_v, pin_v, venc ]], columns=df_ventas.columns)
         pd.concat([df_ventas, nueva], ignore_index=True).to_csv(VENTAS_FILE, index=False)
@@ -105,13 +125,14 @@ def nueva_venta_popup():
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("🚀 NEXA-Stream Manager")
-t1, t2 = st.tabs(["📊 Ventas", "⚙️ Config / Inv"])
+t1, t2 = st.tabs(["📊 Administración de Ventas", "⚙️ Configuración e Inventario"])
 
 with t1:
     h1, h2 = st.columns([1, 2])
     if h1.button("➕ NUEVA VENTA", type="primary"): nueva_venta_popup()
-    search = h2.text_input("", placeholder="🔍 Buscar...", label_visibility="collapsed")
+    search = h2.text_input("", placeholder="🔍 Buscar cliente, plataforma...", label_visibility="collapsed")
     st.divider()
+    
     if not df_ventas.empty:
         mask = df_ventas.apply(lambda r: search.lower() in str(r).lower(), axis=1)
         hoy = datetime.now().date()
@@ -119,23 +140,24 @@ with t1:
             d = (row['Vencimiento'] - hoy).days
             col = "🔴" if d <= 0 else "🟠" if d <= 3 else "🟢"
             with st.container(border=True):
-                ci, cw, ce, cd = st.columns([4, 0.8, 0.4, 0.4])
+                ci, cw, ce, cd = st.columns([3.5, 0.9, 0.4, 0.4])
                 ci.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
-                ci.caption(f"📧 {row['Correo']} | 👤 {row['Perfil']} | 📅 {row['Vencimiento']}")
+                ci.caption(f"📧 {row['Correo']} | 👤 {row['Perfil']} | 📅 Vence: {row['Vencimiento']}")
                 msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%20¿Renovamos?"
-                cw.markdown(f'<br><a href="https://wa.me/{row["WhatsApp"]}?text={msj}" class="wa-button">📲 WA</a>', unsafe_allow_html=True)
+                cw.markdown(f'<a href="https://wa.me/{row["WhatsApp"]}?text={msj}" class="wa-button">📲 WA</a>', unsafe_allow_html=True)
                 if ce.button("📝", key=f"e_{idx}"): editar_venta_popup(idx, row)
                 if cd.button("🗑️", key=f"v_{idx}"):
                     df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
-    else: st.info("Sin ventas.")
+    else: st.info("No hay ventas registradas.")
 
 with t2:
-    st.warning("⚠️ Recuerda descargar tus Backups regularmente para no perder datos si el servidor se reinicia.")
+    st.info("💡 **Consejo:** Descarga tu Backup una vez por semana para asegurar tu información.")
     b1, b2 = st.columns(2)
+    # Botones de descarga (Backup)
     csv_ventas = df_ventas.to_csv(index=False).encode('utf-8')
     csv_inv = df_inv.to_csv(index=False).encode('utf-8')
-    b1.download_button("📥 Descargar Backup Ventas", data=csv_ventas, file_name="backup_ventas.csv", mime="text/csv")
-    b2.download_button("📥 Descargar Backup Inventario", data=csv_inv, file_name="backup_inventario.csv", mime="text/csv")
+    b1.download_button("📥 Descargar Backup de Ventas", data=csv_ventas, file_name="backup_ventas.csv", mime="text/csv", use_container_width=True)
+    b2.download_button("📥 Descargar Backup de Inventario", data=csv_inv, file_name="backup_inventario.csv", mime="text/csv", use_container_width=True)
     
     st.divider()
     col_inv, col_plat = st.columns([2, 1])
@@ -148,6 +170,7 @@ with t2:
                 lista_plataformas.append(nueva_p)
                 pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
                 st.rerun()
+        st.write("---")
         for p in lista_plataformas:
             cp1, cp2 = st.columns([3, 1])
             cp1.write(p)
@@ -172,7 +195,7 @@ with t2:
             with st.container(border=True):
                 c1, c2, c3 = st.columns([4, 0.5, 0.5])
                 c1.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
-                c1.caption(f"👤 Asignado: {row['Asignado_A']}")
+                c1.caption(f"👤 Asignado a: {row['Asignado_A']}")
                 if c2.button("📝", key=f"ed_i_{idx}"):
                     @st.dialog("Editar")
                     def edit_inv():
