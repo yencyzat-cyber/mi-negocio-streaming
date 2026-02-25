@@ -8,11 +8,18 @@ st.set_page_config(page_title="NEXA-Stream Pro", layout="wide")
 
 st.markdown("""
     <style>
-    /* Redondear botones y campos */
-    .stButton>button { border-radius: 20px; height: 38px; }
-    .stTextInput>div>div>input { border-radius: 10px; height: 38px; }
-    /* Ajustar margen superior de la búsqueda para alinear con el botón */
-    [data-testid="stVerticalBlock"] > div:nth-child(1) > div > div { align-items: center; }
+    .stButton>button { border-radius: 20px; height: 38px; width: 100%; }
+    .stTextInput>div>div>input { border-radius: 10px; }
+    .wa-button { 
+        background-color: #25D366; 
+        color: white; 
+        padding: 8px 15px; 
+        border-radius: 15px; 
+        text-decoration: none; 
+        font-weight: bold;
+        display: inline-block;
+        text-align: center;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -35,116 +42,111 @@ def cargar_datos():
 df_ventas, df_inv = cargar_datos()
 
 # --- DIÁLOGOS ---
-@st.dialog("Confirmar Finalización")
-def confirmar_eliminar(index, nombre):
-    st.write(f"¿Deseas eliminar la suscripción de **{nombre}**?")
-    c1, c2 = st.columns(2)
-    if c1.button("SÍ, ELIMINAR", type="primary"):
-        df_final = df_ventas.drop(index)
-        df_final.to_csv(VENTAS_FILE, index=False)
-        st.rerun()
-    if c2.button("CANCELAR"):
+@st.dialog("Editar Correo de Inventario")
+def editar_inv_popup(index, row):
+    new_m = st.text_input("Correo", value=row['Correo'])
+    new_p = st.text_input("Clave", value=row['Password'])
+    new_u = st.selectbox("Usos", [0, 1, 2], index=int(row['Usos']))
+    if st.button("GUARDAR CAMBIOS"):
+        df_inv.at[index, 'Correo'] = new_m
+        df_inv.at[index, 'Password'] = new_p
+        df_inv.at[index, 'Usos'] = new_u
+        df_inv.to_csv(INV_FILE, index=False)
         st.rerun()
 
-@st.dialog("Registrar Nueva Venta")
+@st.dialog("Eliminar de Inventario")
+def borrar_inv_popup(index, correo):
+    st.warning(f"¿Eliminar {correo} del inventario?")
+    if st.button("SÍ, ELIMINAR"):
+        df_i = df_inv.drop(index)
+        df_i.to_csv(INV_FILE, index=False)
+        st.rerun()
+
+@st.dialog("Finalizar Venta")
+def confirmar_eliminar(index, nombre):
+    st.write(f"¿Finalizar suscripción de **{nombre}**?")
+    if st.button("ELIMINAR VENTA", type="primary"):
+        df_f = df_ventas.drop(index)
+        df_f.to_csv(VENTAS_FILE, index=False)
+        st.rerun()
+
+@st.dialog("Nueva Venta")
 def nueva_venta_popup():
     c1, c2 = st.columns(2)
     prod = c1.selectbox("Plataforma", ["YouTube Premium", "Netflix", "Disney+", "Google One", "HBO Max", "Prime Video"])
-    f_ini = c2.date_input("Fecha Inicio", datetime.now())
-    
-    nom = st.text_input("Nombre del Cliente")
-    tel = st.text_input("WhatsApp (ej: 51999888777)")
-    
+    f_ini = c2.date_input("Inicio", datetime.now())
+    nom = st.text_input("Nombre Cliente")
+    tel = st.text_input("WhatsApp (51...)")
     st.divider()
-    st.markdown("### 🔑 Datos de Acceso")
-    
-    # Grid de datos para evitar el cuadro de texto grande
-    col_a, col_b = st.columns(2)
-    col_c, col_d = st.columns(2)
-    
+    ca, cb = st.columns(2); cc, cd = st.columns(2)
     venc = f_ini + timedelta(days=30)
 
     if prod == "YouTube Premium" and not df_inv.empty:
         disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
         if not disponibles.empty:
             sug = disponibles.iloc[0]
-            m_val = col_a.text_input("Correo", value=sug['Correo'])
-            p_val = col_b.text_input("Contraseña", value=sug['Password'])
+            m_v = ca.text_input("Correo", value=sug['Correo'])
+            p_v = cb.text_input("Clave", value=sug['Password'])
         else:
-            st.error("No hay correos disponibles")
-            m_val = col_a.text_input("Correo")
-            p_val = col_b.text_input("Contraseña")
-        perf_val = col_c.text_input("Perfil", value="N/A", disabled=True)
-        pin_val = col_d.text_input("PIN", value="N/A", disabled=True)
+            st.error("Sin cupos en YT"); m_v = ca.text_input("Correo"); p_v = cb.text_input("Clave")
+        perf_v, pin_v = "N/A", "N/A"
     else:
-        m_val = col_a.text_input("Correo")
-        p_val = col_b.text_input("Contraseña")
-        perf_val = col_c.text_input("Perfil")
-        pin_val = col_d.text_input("PIN")
+        m_v, p_v = ca.text_input("Correo"), cb.text_input("Clave")
+        perf_v, pin_v = cc.text_input("Perfil"), cd.text_input("PIN")
 
-    if st.button("CONFIRMAR Y GUARDAR VENTA", type="primary", use_container_width=True):
-        if nom and tel and m_val:
-            nueva = pd.DataFrame([[ "🟢", nom, tel, prod, m_val, p_val, perf_val, pin_val, venc ]], 
-                                 columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
-            pd.concat([df_ventas, nueva], ignore_index=True).to_csv(VENTAS_FILE, index=False)
-            
-            if prod == "YouTube Premium" and not df_inv.empty:
-                idx = df_inv[df_inv['Correo'] == m_val].index[0]
-                df_inv.at[idx, 'Usos'] += 1
-                df_inv.to_csv(INV_FILE, index=False)
-            st.rerun()
+    if st.button("GUARDAR", type="primary", use_container_width=True):
+        nueva = pd.DataFrame([[ "🟢", nom, tel, prod, m_v, p_v, perf_v, pin_v, venc ]], 
+                             columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento"])
+        pd.concat([df_ventas, nueva], ignore_index=True).to_csv(VENTAS_FILE, index=False)
+        if prod == "YouTube Premium" and not df_inv.empty and m_v == sug['Correo']:
+            idx = df_inv[df_inv['Correo'] == m_v].index[0]
+            df_inv.at[idx, 'Usos'] += 1
+            df_inv.to_csv(INV_FILE, index=False)
+        st.rerun()
 
-# --- INTERFAZ PRINCIPAL ---
+# --- INTERFAZ ---
 st.title("🚀 NEXA-Stream Manager")
-t1, t2 = st.tabs(["📊 Administración", "📦 Inventario YT"])
+t1, t2 = st.tabs(["📊 Ventas", "📦 Inventario YT"])
 
 with t1:
-    # CABECERA EN UNA SOLA LÍNEA
-    head_col1, head_col2, head_col3 = st.columns([1, 1.5, 0.5])
-    
-    with head_col1:
-        if st.button("➕ NUEVA VENTA", type="primary"):
-            nueva_venta_popup()
-            
-    with head_col2:
-        # Buscador pequeño y alineado
+    h1, h2 = st.columns([1, 2])
+    with h1: 
+        if st.button("➕ NUEVA VENTA", type="primary"): nueva_venta_popup()
+    with h2: 
         search = st.text_input("", placeholder="🔍 Buscar...", label_visibility="collapsed")
 
     st.divider()
-    
     if not df_ventas.empty:
-        mask = df_ventas.apply(lambda row: search.lower() in str(row).lower(), axis=1)
-        df_f = df_ventas[mask].sort_values(by="Vencimiento")
-        
+        mask = df_ventas.apply(lambda r: search.lower() in str(r).lower(), axis=1)
         hoy = datetime.now().date()
-        for index, row in df_f.iterrows():
-            dias = (row['Vencimiento'] - hoy).days
-            status_color = "🔴" if dias <= 0 else "🟠" if dias <= 3 else "🟢"
-            
+        for idx, row in df_ventas[mask].sort_values(by="Vencimiento").iterrows():
+            d = (row['Vencimiento'] - hoy).days
+            col = "🔴" if d <= 0 else "🟠" if d <= 3 else "🟢"
             with st.container(border=True):
                 c_inf, c_wa, c_del = st.columns([4, 1, 0.5])
                 with c_inf:
-                    st.write(f"{status_color} **{row['Cliente']}** | {row['Producto']}")
-                    st.caption(f"📧 {row['Correo']} | 🔑 {row['Pass']} | 👤 {row['Perfil']} | 📍 PIN: {row['PIN']} | 📅 Vence: {row['Vencimiento']}")
-                
+                    st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
+                    st.caption(f"📧 {row['Correo']} | 👤 {row['Perfil']} | 📅 {row['Vencimiento']}")
                 with c_wa:
                     msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%20¿Renovamos?"
-                    st.markdown(f"<br>[📲 Cobrar](https://wa.me/{row['WhatsApp']}?text={msj})", unsafe_allow_html=True)
-                
-                if c_del.button("🗑️", key=f"del_{index}"):
-                    confirmar_eliminar(index, row['Cliente'])
-    else:
-        st.info("Lista vacía. Comienza registrando tu primera venta.")
+                    st.markdown(f'<br><a href="https://wa.me/{row["WhatsApp"]}?text={msj}" class="wa-button">📲 WA</a>', unsafe_allow_html=True)
+                if c_del.button("🗑️", key=f"v_{idx}"): confirmar_eliminar(idx, row['Cliente'])
+    else: st.info("Sin ventas.")
 
 with t2:
-    st.subheader("Configuración de Inventario")
-    with st.expander("➕ Cargar Gmail"):
-        ca, cb, cc = st.columns([2,1,1])
-        m = ca.text_input("Gmail")
-        p = cb.text_input("Clave")
-        u = cc.selectbox("Usos", [0, 1, 2])
-        if st.button("Agregar Correo"):
-            ni = pd.DataFrame([[m, p, u]], columns=["Correo", "Password", "Usos"])
-            pd.concat([df_inv, ni], ignore_index=True).to_csv(INV_FILE, index=False)
-            st.rerun()
-    st.dataframe(df_inv, use_container_width=True)
+    st.subheader("Inventario de Correos")
+    if st.button("➕ AGREGAR CORREO NUEVO"):
+        @st.dialog("Nuevo Correo")
+        def add_inv():
+            m = st.text_input("Gmail"); p = st.text_input("Clave"); u = st.selectbox("Usos", [0,1,2])
+            if st.button("GUARDAR"):
+                ni = pd.DataFrame([[m, p, u]], columns=["Correo", "Password", "Usos"])
+                pd.concat([df_inv, ni], ignore_index=True).to_csv(INV_FILE, index=False); st.rerun()
+        add_inv()
+
+    for idx, row in df_inv.iterrows():
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([3, 1, 1])
+            c1.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
+            if c2.button("📝 Editar", key=f"ed_{idx}"): editar_inv_popup(idx, row)
+            if c3.button("🗑️", key=f"d_{idx}"): borrar_inv_popup(idx, row['Correo'])
