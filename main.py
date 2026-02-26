@@ -218,4 +218,4 @@ with t2:
                             df_inv.to_csv(INV_FILE, index=False); st.rerun()
                     edit_inv()
                 if c3.button("🗑️", key=f"del_i_{idx}", use_container_width=True):
-                    df_inv.drop(idx).to_csv(INV_FILE, index=False); st.rerun()
+                    df_inv.drop(idx).to_csv(INV_FILE, index=False); st.rerun(
