@@ -9,9 +9,8 @@ import string
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.7 (Dashboard, Finanzas y CRM)"
+VERSION_APP = "1.7.1 (Corrección Dashboard)"
 
-# ENLACE REAL DE TU APLICACIÓN
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
 st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_sidebar_state="expanded")
@@ -22,7 +21,6 @@ st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_side
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    /* Ahora la fila se divide en 4 botones (25% cada uno) */
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important;
     }
@@ -36,7 +34,6 @@ st.markdown("""
     }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
     .stTextInput>div>div>input, .stNumberInput>div>div>input { border-radius: 8px; height: 38px; }
-    /* Estilo para las métricas del Dashboard */
     div[data-testid="metric-container"] {
         background-color: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 10px;
     }
@@ -50,7 +47,7 @@ VENTAS_FILE = "ventas_data.csv"
 INV_FILE = "inventario_yt.csv"
 PLAT_FILE = "plataformas.csv"
 USUARIOS_FILE = "usuarios.csv"
-EX_CLIENTES_FILE = "ex_clientes.csv" # La papelera
+EX_CLIENTES_FILE = "ex_clientes.csv"
 
 def generar_password_aleatoria(longitud=6):
     caracteres = string.ascii_uppercase + string.digits
@@ -61,7 +58,6 @@ def generar_usuario(nombre):
     return f"{base}{random.randint(100, 999)}"
 
 def cargar_datos():
-    # Carga de Ventas y parche de nuevas columnas financieras
     if os.path.exists(VENTAS_FILE):
         df = pd.read_csv(VENTAS_FILE)
         df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce').dt.date
@@ -73,7 +69,6 @@ def cargar_datos():
     else:
         df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio"])
     
-    # Carga de Papelera (Ex-Clientes)
     if os.path.exists(EX_CLIENTES_FILE): df_ex = pd.read_csv(EX_CLIENTES_FILE)
     else: df_ex = pd.DataFrame(columns=df.columns)
 
@@ -133,7 +128,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN (NUEVAS FINANZAS)
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN
 # ==============================================================================
 @st.dialog("Editar Registro")
 def editar_venta_popup(idx, row):
@@ -144,7 +139,6 @@ def editar_venta_popup(idx, row):
     
     st.divider()
     c_costo, c_precio = st.columns(2)
-    # Carga los valores financieros de la fila, si no existen los pone en 0.0
     val_costo = float(row['Costo']) if not pd.isna(row.get('Costo')) else 0.0
     val_precio = float(row['Precio']) if not pd.isna(row.get('Precio')) else 0.0
     costo = c_costo.number_input("Costo (Lo que pagas)", value=val_costo, step=1.0)
@@ -252,10 +246,8 @@ if menu == "📊 Panel de Ventas":
     else:
         df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
-    # --- ALERTAS DE COBRO AUTOMÁTICAS ---
     hoy = datetime.now().date()
     if not df_mostrar.empty:
-        # Clientes que vencen en los próximos 3 días o que ya vencieron
         df_alertas = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)]
         if not df_alertas.empty:
             with st.expander(f"⚠️ ¡ATENCIÓN! Tienes {len(df_alertas)} cobros pendientes o próximos", expanded=True):
@@ -317,7 +309,7 @@ if menu == "📊 Panel de Ventas":
                             df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
     else: st.info("No hay registros activos.")
 
-# --- VISTA 2: DASHBOARD FINANCIERO ---
+# --- VISTA 2: DASHBOARD FINANCIERO (CORREGIDO PARA MÓVIL) ---
 elif menu == "📈 Dashboard (Rendimiento)":
     st.header("Análisis de Rendimiento")
     
@@ -331,7 +323,6 @@ elif menu == "📈 Dashboard (Rendimiento)":
     if df_dash.empty:
         st.warning("No hay suficientes datos para generar el Dashboard.")
     else:
-        # Asegurarse de que las columnas son numéricas
         df_dash['Costo'] = pd.to_numeric(df_dash['Costo'], errors='coerce').fillna(0)
         df_dash['Precio'] = pd.to_numeric(df_dash['Precio'], errors='coerce').fillna(0)
         
@@ -340,11 +331,21 @@ elif menu == "📈 Dashboard (Rendimiento)":
         total_ganancia = total_ingresos - total_costos
         total_clientes = len(df_dash)
         
-        c1, c2, c3, c4 = st.columns(4) if vista == "💻 PC" else st.columns(2)
-        c1.metric("👥 Clientes Activos", f"{total_clientes}")
-        c2.metric("💰 Ventas Brutas", f"${total_ingresos:.2f}")
-        c3.metric("📉 Costos Totales", f"${total_costos:.2f}")
-        c4.metric("🚀 GANANCIA NETA", f"${total_ganancia:.2f}")
+        # LA CORRECCIÓN CLAVE PARA QUE NO COLAPSE EN CELULAR
+        if vista == "💻 PC":
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("👥 Clientes Activos", f"{total_clientes}")
+            c2.metric("💰 Ventas Brutas", f"${total_ingresos:.2f}")
+            c3.metric("📉 Costos Totales", f"${total_costos:.2f}")
+            c4.metric("🚀 GANANCIA NETA", f"${total_ganancia:.2f}")
+        else:
+            # En móvil se muestran en dos filas de 2x2 para encajar perfectamente
+            c1, c2 = st.columns(2)
+            c1.metric("👥 Clientes", f"{total_clientes}")
+            c2.metric("💰 Ventas", f"${total_ingresos:.2f}")
+            c3, c4 = st.columns(2)
+            c3.metric("📉 Costos", f"${total_costos:.2f}")
+            c4.metric("🚀 GANANCIA", f"${total_ganancia:.2f}")
         
         st.divider()
         st.subheader("Ventas por Plataforma")
