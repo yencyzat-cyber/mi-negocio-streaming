@@ -12,7 +12,7 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.11 (Renovaciones Inteligentes y Cuentas Rotativas)"
+VERSION_APP = "1.13 (Botones Descriptivos y Diseño Nativo)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
@@ -24,16 +24,11 @@ st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_side
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important;
-    }
-    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-        width: 25% !important; min-width: 0 !important; flex: 1 1 0px !important;
-    }
+    /* Diseño limpio y responsivo para los botones con texto */
     .stButton>button, .stLinkButton>a {
         border-radius: 8px !important; height: 38px !important; padding: 0px !important;
         display: flex !important; align-items: center !important; justify-content: center !important;
-        width: 100% !important; font-size: 16px !important; margin: 0px !important;
+        width: 100% !important; font-size: 15px !important; margin-bottom: 5px !important;
     }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 8px; height: 38px; }
@@ -152,17 +147,14 @@ if not st.session_state.logged_in:
 # ==============================================================================
 # BLOQUE 5: DIÁLOGOS DE GESTIÓN Y RENOVACIONES
 # ==============================================================================
-
-# --- NUEVO PANEL DE RENOVACIÓN INTELIGENTE ---
 @st.dialog("🔄 Renovar Suscripción")
 def renovar_venta_popup(idx, row):
     st.write(f"Renovando cuenta de: **{row['Cliente']}** (📺 {row['Producto']})")
     dur = st.radio("Plazo de renovación:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
     
-    # Cálculo inteligente de fechas
     hoy = datetime.now().date()
     venc_actual = pd.to_datetime(row['Vencimiento']).date()
-    fecha_base = max(hoy, venc_actual) # Si pagó temprano, suma desde el vencimiento. Si pagó tarde, suma desde hoy.
+    fecha_base = max(hoy, venc_actual) 
     
     if dur == "1 Mes": nueva_fecha = fecha_base + timedelta(days=30)
     elif dur == "2 Meses": nueva_fecha = fecha_base + timedelta(days=60)
@@ -173,14 +165,11 @@ def renovar_venta_popup(idx, row):
     st.divider()
     
     tipo_cta = st.radio("Credenciales para este nuevo periodo:", ["Mantener la misma cuenta", "Asignar cuenta nueva (Rotativa)"], horizontal=True)
-    
-    # Por defecto, mantiene los actuales
     mv, pv = row['Correo'], row['Pass'] 
     
     if tipo_cta == "Asignar cuenta nueva (Rotativa)":
         ca, cb = st.columns(2)
         tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
-        
         if row['Producto'] == "YouTube Premium" and tiene_acceso_inventario:
             disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
             if not disponibles.empty:
@@ -203,7 +192,6 @@ def renovar_venta_popup(idx, row):
         st.success("¡Renovado con éxito!")
         st.rerun()
 
-# --- PANEL DE EDICIÓN NORMAL ---
 @st.dialog("Editar Registro")
 def editar_venta_popup(idx, row):
     prod = st.selectbox("Plataforma", lista_plataformas, index=lista_plataformas.index(row['Producto']) if row['Producto'] in lista_plataformas else 0)
@@ -228,7 +216,6 @@ def editar_venta_popup(idx, row):
         df_ventas.to_csv(VENTAS_FILE, index=False)
         st.rerun()
 
-# --- PANEL DE NUEVA VENTA ---
 @st.dialog("Nueva Venta")
 def nueva_venta_popup():
     c1, c2 = st.columns(2)
@@ -248,6 +235,7 @@ def nueva_venta_popup():
     st.divider()
     ca, cb = st.columns(2)
     tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
+    
     if prod == "YouTube Premium":
         if tiene_acceso_inventario:
             if not df_inv.empty:
@@ -292,16 +280,13 @@ with st.sidebar:
         menu_opciones.append("⚙️ Configuración")
         
     menu = st.radio("Navegación", menu_opciones, label_visibility="collapsed")
-    
-    st.divider()
-    vista = st.radio("Dispositivo:", ["📱 Móvil", "💻 PC"], horizontal=True)
     st.divider()
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
 
 # ==============================================================================
-# VISTAS PRINCIPALES
+# VISTAS PRINCIPALES (DISEÑO MÓVIL ESTANDARIZADO)
 # ==============================================================================
 
 if menu == "📊 Panel de Ventas":
@@ -357,37 +342,21 @@ if menu == "📊 Panel de Ventas":
             
             with st.container(border=True):
                 vendedor_badge = f" 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" and 'filtro_admin' in locals() and filtro_admin == "Todos los vendedores" else ""
-
-                if vista == "📱 Móvil":
-                    st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
-                    st.caption(f"📧 {row['Correo']} | 📅 {row['Vencimiento']}{vendedor_badge}")
-                    st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
-                    cols = st.columns(4)
-                    with cols[0]: st.link_button("📲", wa_url, use_container_width=True, help="WhatsApp")
-                    with cols[1]: 
-                        # LLAMADO AL NUEVO PANEL DE RENOVACIÓN
-                        if st.button("🔄", key=f"r_{idx}", use_container_width=True, help="Renovar Cuenta"): renovar_venta_popup(idx, row)
-                    with cols[2]: 
-                        if st.button("📝", key=f"e_{idx}", use_container_width=True, help="Editar"): editar_venta_popup(idx, row)
-                    with cols[3]:
-                        if st.button("🗑️", key=f"v_{idx}", use_container_width=True, help="Mover a Papelera"):
-                            df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
-                            df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
-                            df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
-                else:
-                    c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 0.5, 0.5, 0.5, 0.5])
-                    with c1: st.write(f"{col} **{row['Cliente']}** | 📧 {row['Correo']}{vendedor_badge}")
-                    with c2: st.write(f"📺 {row['Producto']}")
-                    with c3: st.link_button("📲", wa_url, use_container_width=True)
-                    with c4: 
-                        if st.button("🔄", key=f"rpc_{idx}", use_container_width=True, help="Renovar Cuenta"): renovar_venta_popup(idx, row)
-                    with c5: 
-                        if st.button("📝", key=f"epc_{idx}", use_container_width=True): editar_venta_popup(idx, row)
-                    with c6: 
-                        if st.button("🗑️", key=f"vpc_{idx}", use_container_width=True):
-                            df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
-                            df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
-                            df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
+                
+                st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
+                st.caption(f"📧 {row['Correo']} | 📅 {row['Vencimiento']}{vendedor_badge}")
+                
+                # Botones ahora con texto explicativo usando columnas de Streamlit nativas
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    st.link_button("📲 Notificar", wa_url, use_container_width=True)
+                    if st.button("📝 Editar", key=f"e_{idx}", use_container_width=True): editar_venta_popup(idx, row)
+                with btn_col2:
+                    if st.button("🔄 Renovar", key=f"r_{idx}", use_container_width=True): renovar_venta_popup(idx, row)
+                    if st.button("🗑️ Papelera", key=f"v_{idx}", use_container_width=True):
+                        df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
+                        df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
+                        df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
     else: st.info("No hay registros que coincidan con los filtros.")
 
 elif menu == "📈 Dashboard":
@@ -404,19 +373,12 @@ elif menu == "📈 Dashboard":
         total_ganancia = total_ingresos - total_costos
         total_clientes = len(df_dash)
         
-        if vista == "💻 PC":
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("👥 Clientes Activos", f"{total_clientes}")
-            c2.metric("💰 Ventas Brutas", f"${total_ingresos:.2f}")
-            c3.metric("📉 Costos Totales", f"${total_costos:.2f}")
-            c4.metric("🚀 GANANCIA NETA", f"${total_ganancia:.2f}")
-        else:
-            c1, c2 = st.columns(2)
-            c1.metric("👥 Clientes", f"{total_clientes}")
-            c2.metric("💰 Ventas", f"${total_ingresos:.2f}")
-            c3, c4 = st.columns(2)
-            c3.metric("📉 Costos", f"${total_costos:.2f}")
-            c4.metric("🚀 GANANCIA", f"${total_ganancia:.2f}")
+        c1, c2 = st.columns(2)
+        c1.metric("👥 Clientes", f"{total_clientes}")
+        c2.metric("💰 Ventas", f"${total_ingresos:.2f}")
+        c3, c4 = st.columns(2)
+        c3.metric("📉 Costos", f"${total_costos:.2f}")
+        c4.metric("🚀 GANANCIA", f"${total_ganancia:.2f}")
         
         st.divider()
         st.subheader("Distribución por Plataforma")
@@ -438,12 +400,12 @@ elif menu == "📂 Ex-Clientes":
             with st.container(border=True):
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
-                if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}"):
+                if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
                     df_ex_clientes.drop(idx).to_csv(EX_CLIENTES_FILE, index=False); st.rerun()
 
 elif menu == "📦 Inventario YT":
     st.header("Inventario YouTube")
-    if st.button("➕ NUEVO CORREO", type="primary"):
+    if st.button("➕ NUEVO CORREO", type="primary", use_container_width=True):
         @st.dialog("Registrar Correo")
         def add():
             m = st.text_input("Gmail")
@@ -495,8 +457,8 @@ elif menu == "👥 Vendedores":
         st.success("✅ ¡PERFIL CREADO CON ÉXITO!")
         st.info(f"**Usuario:** {usr_gen} | **Contraseña:** {pwd_gen}")
         col_wa, col_ok = st.columns(2)
-        col_wa.link_button("📲 Enviar clave por WhatsApp", enlace_wa, use_container_width=True)
-        if col_ok.button("✅ Ya lo envié, ocultar", use_container_width=True):
+        col_wa.link_button("📲 Enviar clave", enlace_wa, use_container_width=True)
+        if col_ok.button("✅ Ocultar", use_container_width=True):
             st.session_state.nuevo_vend_usr = None
             st.rerun()
     else:
@@ -530,8 +492,7 @@ elif menu == "👥 Vendedores":
             with st.container(border=True):
                 st.write(f"👤 **{row['Usuario']}** | 📱 {row['Telefono']}")
                 st.caption(f"🔑 Clave: {row['Password']} | 📺 Auto-asignar YT: **{row['Acceso_YT']}**")
-                if vista == "📱 Móvil": st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
-                c_edit, c_del = st.columns(2) if vista == "📱 Móvil" else st.columns([1, 10])
+                c_edit, c_del = st.columns(2)
                 with c_edit:
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
@@ -543,8 +504,8 @@ elif menu == "⚙️ Configuración":
     st.subheader("📝 Editar Plantillas de WhatsApp")
     st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
     with st.form("form_plantillas"):
-        rec = st.text_area("1️⃣ Mensaje de Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa["recordatorio"], height=80)
-        ven = st.text_area("2️⃣ Mensaje de Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa["vencido"], height=80)
+        rec = st.text_area("1️⃣ Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa["recordatorio"], height=80)
+        ven = st.text_area("2️⃣ Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa["vencido"], height=80)
         ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa["vendedor"], height=100)
         if st.form_submit_button("💾 Guardar Plantillas", type="primary", use_container_width=True):
             plantillas_wa["recordatorio"] = rec
@@ -565,5 +526,5 @@ elif menu == "⚙️ Configuración":
     for p in lista_plataformas:
         cp1, cp2 = st.columns([4, 1])
         cp1.write(f"📺 {p}")
-        if cp2.button("🗑️", key=f"del_p_{p}"):
+        if cp2.button("🗑️", key=f"del_p_{p}", use_container_width=True):
             lista_plataformas.remove(p); pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False); st.rerun()
