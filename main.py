@@ -12,7 +12,7 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.10 (Multi-Plantillas de WhatsApp Inteligentes)"
+VERSION_APP = "1.11 (Renovaciones Inteligentes y Cuentas Rotativas)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
@@ -42,7 +42,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: FUNCIONES DE DATOS, SEGURIDAD Y PLANTILLAS MÚLTIPLES
+# BLOQUE 3: FUNCIONES DE DATOS, SEGURIDAD Y PLANTILLAS
 # ==============================================================================
 VENTAS_FILE = "ventas_data.csv"
 INV_FILE = "inventario_yt.csv"
@@ -62,8 +62,7 @@ def load_templates():
         try:
             with open(WA_TEMPLATES_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
-            return DEFAULT_TEMPLATES
+        except: return DEFAULT_TEMPLATES
     return DEFAULT_TEMPLATES
 
 def save_templates(templates_dict):
@@ -110,7 +109,6 @@ def limpiar_whatsapp(numero):
     if len(solo_numeros) == 9: return f"51{solo_numeros}"
     return solo_numeros
 
-# Carga de las plantillas actuales
 plantillas_wa = load_templates()
 
 # ==============================================================================
@@ -152,8 +150,60 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN Y RENOVACIONES
 # ==============================================================================
+
+# --- NUEVO PANEL DE RENOVACIÓN INTELIGENTE ---
+@st.dialog("🔄 Renovar Suscripción")
+def renovar_venta_popup(idx, row):
+    st.write(f"Renovando cuenta de: **{row['Cliente']}** (📺 {row['Producto']})")
+    dur = st.radio("Plazo de renovación:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
+    
+    # Cálculo inteligente de fechas
+    hoy = datetime.now().date()
+    venc_actual = pd.to_datetime(row['Vencimiento']).date()
+    fecha_base = max(hoy, venc_actual) # Si pagó temprano, suma desde el vencimiento. Si pagó tarde, suma desde hoy.
+    
+    if dur == "1 Mes": nueva_fecha = fecha_base + timedelta(days=30)
+    elif dur == "2 Meses": nueva_fecha = fecha_base + timedelta(days=60)
+    elif dur == "6 Meses": nueva_fecha = fecha_base + timedelta(days=180)
+    else: nueva_fecha = fecha_base + timedelta(days=365)
+    
+    st.info(f"📅 El nuevo vencimiento será el: **{nueva_fecha}**")
+    st.divider()
+    
+    tipo_cta = st.radio("Credenciales para este nuevo periodo:", ["Mantener la misma cuenta", "Asignar cuenta nueva (Rotativa)"], horizontal=True)
+    
+    # Por defecto, mantiene los actuales
+    mv, pv = row['Correo'], row['Pass'] 
+    
+    if tipo_cta == "Asignar cuenta nueva (Rotativa)":
+        ca, cb = st.columns(2)
+        tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
+        
+        if row['Producto'] == "YouTube Premium" and tiene_acceso_inventario:
+            disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
+            if not disponibles.empty:
+                sug = disponibles.iloc[0]
+                with ca: mv = st.text_input("Nuevo Correo (Automático)", value=sug['Correo'])
+                with cb: pv = st.text_input("Nueva Clave", value=sug['Password'])
+            else:
+                st.warning("No hay cupos en inventario.")
+                with ca: mv = st.text_input("Nuevo Correo Manual")
+                with cb: pv = st.text_input("Nueva Clave Manual")
+        else:
+            with ca: mv = st.text_input("Nuevo Correo")
+            with cb: pv = st.text_input("Nueva Clave")
+            
+    if st.button("CONFIRMAR RENOVACIÓN", type="primary", use_container_width=True):
+        df_ventas.at[idx, 'Vencimiento'] = nueva_fecha
+        df_ventas.at[idx, 'Correo'] = mv
+        df_ventas.at[idx, 'Pass'] = pv
+        df_ventas.to_csv(VENTAS_FILE, index=False)
+        st.success("¡Renovado con éxito!")
+        st.rerun()
+
+# --- PANEL DE EDICIÓN NORMAL ---
 @st.dialog("Editar Registro")
 def editar_venta_popup(idx, row):
     prod = st.selectbox("Plataforma", lista_plataformas, index=lista_plataformas.index(row['Producto']) if row['Producto'] in lista_plataformas else 0)
@@ -178,6 +228,7 @@ def editar_venta_popup(idx, row):
         df_ventas.to_csv(VENTAS_FILE, index=False)
         st.rerun()
 
+# --- PANEL DE NUEVA VENTA ---
 @st.dialog("Nueva Venta")
 def nueva_venta_popup():
     c1, c2 = st.columns(2)
@@ -196,9 +247,7 @@ def nueva_venta_popup():
     
     st.divider()
     ca, cb = st.columns(2)
-    
     tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
-    
     if prod == "YouTube Premium":
         if tiene_acceso_inventario:
             if not df_inv.empty:
@@ -255,7 +304,6 @@ with st.sidebar:
 # VISTAS PRINCIPALES
 # ==============================================================================
 
-# --- VISTA 1: VENTAS Y FILTROS ---
 if menu == "📊 Panel de Ventas":
     st.header("Gestión de Suscripciones")
     
@@ -288,13 +336,11 @@ if menu == "📊 Panel de Ventas":
     if filtro_plat != "Todas":
         df_mostrar = df_mostrar[df_mostrar['Producto'] == filtro_plat]
     if filtro_est != "Todos":
-        if filtro_est == "🟢 Activos":
-            df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date > hoy + timedelta(days=3)]
+        if filtro_est == "🟢 Activos": df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date > hoy + timedelta(days=3)]
         elif filtro_est == "🟠 Por Vencer (3 días)":
             mask_vencer = (pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)) & (pd.to_datetime(df_mostrar['Vencimiento']).dt.date > hoy)
             df_mostrar = df_mostrar[mask_vencer]
-        elif filtro_est == "🔴 Vencidos":
-            df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy]
+        elif filtro_est == "🔴 Vencidos": df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy]
 
     st.write("---")
 
@@ -303,11 +349,8 @@ if menu == "📊 Panel de Ventas":
             d = (row['Vencimiento'] - hoy).days
             col = "🔴" if d <= 0 else "🟠" if d <= 3 else "🟢"
             
-            # EL CEREBRO DE LAS PLANTILLAS: Detecta los días y elige qué decir
-            if d <= 0:
-                texto_base = plantillas_wa["vencido"]
-            else:
-                texto_base = plantillas_wa["recordatorio"]
+            if d <= 0: texto_base = plantillas_wa["vencido"]
+            else: texto_base = plantillas_wa["recordatorio"]
                 
             texto_wa = texto_base.replace("{cliente}", str(row['Cliente'])).replace("{producto}", str(row['Producto'])).replace("{vencimiento}", str(row['Vencimiento']))
             wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
@@ -322,9 +365,8 @@ if menu == "📊 Panel de Ventas":
                     cols = st.columns(4)
                     with cols[0]: st.link_button("📲", wa_url, use_container_width=True, help="WhatsApp")
                     with cols[1]: 
-                        if st.button("🔄", key=f"r_{idx}", use_container_width=True, help="Renovar 1 Mes"):
-                            df_ventas.at[idx, 'Vencimiento'] = row['Vencimiento'] + timedelta(days=30)
-                            df_ventas.to_csv(VENTAS_FILE, index=False); st.rerun()
+                        # LLAMADO AL NUEVO PANEL DE RENOVACIÓN
+                        if st.button("🔄", key=f"r_{idx}", use_container_width=True, help="Renovar Cuenta"): renovar_venta_popup(idx, row)
                     with cols[2]: 
                         if st.button("📝", key=f"e_{idx}", use_container_width=True, help="Editar"): editar_venta_popup(idx, row)
                     with cols[3]:
@@ -338,9 +380,7 @@ if menu == "📊 Panel de Ventas":
                     with c2: st.write(f"📺 {row['Producto']}")
                     with c3: st.link_button("📲", wa_url, use_container_width=True)
                     with c4: 
-                        if st.button("🔄", key=f"rpc_{idx}", use_container_width=True):
-                            df_ventas.at[idx, 'Vencimiento'] = row['Vencimiento'] + timedelta(days=30)
-                            df_ventas.to_csv(VENTAS_FILE, index=False); st.rerun()
+                        if st.button("🔄", key=f"rpc_{idx}", use_container_width=True, help="Renovar Cuenta"): renovar_venta_popup(idx, row)
                     with c5: 
                         if st.button("📝", key=f"epc_{idx}", use_container_width=True): editar_venta_popup(idx, row)
                     with c6: 
@@ -350,21 +390,15 @@ if menu == "📊 Panel de Ventas":
                             df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
     else: st.info("No hay registros que coincidan con los filtros.")
 
-# --- VISTA 2: DASHBOARD FINANCIERO ---
 elif menu == "📈 Dashboard":
     st.header("Análisis de Rendimiento")
-    
-    if st.session_state.role == "Admin":
-        df_dash = df_ventas
-    else:
-        df_dash = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
+    if st.session_state.role == "Admin": df_dash = df_ventas
+    else: df_dash = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
         
-    if df_dash.empty:
-        st.warning("No hay suficientes datos.")
+    if df_dash.empty: st.warning("No hay suficientes datos.")
     else:
         df_dash['Costo'] = pd.to_numeric(df_dash['Costo'], errors='coerce').fillna(0)
         df_dash['Precio'] = pd.to_numeric(df_dash['Precio'], errors='coerce').fillna(0)
-        
         total_ingresos = df_dash['Precio'].sum()
         total_costos = df_dash['Costo'].sum()
         total_ganancia = total_ingresos - total_costos
@@ -388,7 +422,6 @@ elif menu == "📈 Dashboard":
         st.subheader("Distribución por Plataforma")
         ventas_plat = df_dash['Producto'].value_counts().reset_index()
         ventas_plat.columns = ['Plataforma', 'Cantidad']
-        
         grafico_anillo = alt.Chart(ventas_plat).mark_arc(innerRadius=60).encode(
             theta=alt.Theta(field="Cantidad", type="quantitative"),
             color=alt.Color(field="Plataforma", type="nominal", legend=alt.Legend(title="Plataformas", orient="bottom")),
@@ -396,13 +429,10 @@ elif menu == "📈 Dashboard":
         ).properties(height=350).configure_view(strokeWidth=0)
         st.altair_chart(grafico_anillo, use_container_width=True)
 
-# --- VISTA 3: EX-CLIENTES (PAPELERA) ---
 elif menu == "📂 Ex-Clientes":
     st.header("Historial y Papelera")
     df_ex_mostrar = df_ex_clientes if st.session_state.role == "Admin" else df_ex_clientes[df_ex_clientes['Vendedor'] == st.session_state.user]
-    
-    if df_ex_mostrar.empty:
-        st.info("La papelera está vacía.")
+    if df_ex_mostrar.empty: st.info("La papelera está vacía.")
     else:
         for idx, row in df_ex_mostrar.iterrows():
             with st.container(border=True):
@@ -411,7 +441,6 @@ elif menu == "📂 Ex-Clientes":
                 if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}"):
                     df_ex_clientes.drop(idx).to_csv(EX_CLIENTES_FILE, index=False); st.rerun()
 
-# --- VISTA 4: INVENTARIO YT (SOLO ADMIN) ---
 elif menu == "📦 Inventario YT":
     st.header("Inventario YouTube")
     if st.button("➕ NUEVO CORREO", type="primary"):
@@ -442,10 +471,8 @@ elif menu == "📦 Inventario YT":
                 if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
                     df_inv.drop(idx).to_csv(INV_FILE, index=False); st.rerun()
 
-# --- VISTA 5: GESTIÓN DE VENDEDORES (SOLO ADMIN) ---
 elif menu == "👥 Vendedores":
     st.header("Control de Personal")
-    
     @st.dialog("Editar Vendedor")
     def editar_vendedor_popup(idx, row):
         st.write(f"Editando a: **{row['Usuario']}**")
@@ -463,11 +490,8 @@ elif menu == "👥 Vendedores":
         pwd_gen = st.session_state.nuevo_vend_pwd
         nom_gen = st.session_state.nuevo_vend_nom
         tel_gen = st.session_state.nuevo_vend_tel
-        
-        # Uso de la plantilla de Nuevo Vendedor
         texto_wa = plantillas_wa["vendedor"].replace("{nombre}", nom_gen).replace("{usuario}", usr_gen).replace("{password}", pwd_gen).replace("{link}", LINK_APP)
         enlace_wa = f"https://wa.me/{tel_gen}?text={quote(texto_wa)}"
-        
         st.success("✅ ¡PERFIL CREADO CON ÉXITO!")
         st.info(f"**Usuario:** {usr_gen} | **Contraseña:** {pwd_gen}")
         col_wa, col_ok = st.columns(2)
@@ -514,18 +538,14 @@ elif menu == "👥 Vendedores":
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
                         df_usuarios.drop(idx).to_csv(USUARIOS_FILE, index=False); st.rerun()
 
-# --- VISTA 6: CONFIGURACIÓN GENERAL (SOLO ADMIN) ---
 elif menu == "⚙️ Configuración":
     st.header("Configuración del Sistema")
-    
     st.subheader("📝 Editar Plantillas de WhatsApp")
     st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
-    
     with st.form("form_plantillas"):
         rec = st.text_area("1️⃣ Mensaje de Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa["recordatorio"], height=80)
         ven = st.text_area("2️⃣ Mensaje de Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa["vencido"], height=80)
         ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa["vendedor"], height=100)
-        
         if st.form_submit_button("💾 Guardar Plantillas", type="primary", use_container_width=True):
             plantillas_wa["recordatorio"] = rec
             plantillas_wa["vencido"] = ven
@@ -533,7 +553,6 @@ elif menu == "⚙️ Configuración":
             save_templates(plantillas_wa)
             st.success("¡Plantillas guardadas y activas!")
             st.rerun()
-
     st.divider()
     st.subheader("🛠 Plataformas")
     c_plat, c_pbtn = st.columns([3, 1])
