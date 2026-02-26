@@ -12,9 +12,10 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.20 (Copiado Rápido Móvil)"
+VERSION_APP = "1.21 (Upsell de Bóveda YT)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
+NUMERO_ADMIN = "51902028672" # Tu número para recibir las solicitudes de pago
 
 st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_sidebar_state="expanded")
 
@@ -55,7 +56,6 @@ st.markdown("""
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 8px; height: 38px; }
     div[data-testid="metric-container"] { background-color: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 10px; }
-    /* Ajuste para que los bloques de código (copiar) se vean limpios */
     pre { margin-bottom: 0rem !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -94,11 +94,9 @@ def generar_usuario(nombre):
     base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower())
     return f"{base}{random.randint(100, 999)}"
 
-# Base de nombres para el generador
 NOMBRES = ["Juan", "Carlos", "Jose", "Luis", "David", "Javier", "Daniel", "Maria", "Ana", "Rosa", "Carmen", "Sofia", "Lucia"]
 APELLIDOS = ["Garcia", "Martinez", "Lopez", "Gonzalez", "Perez", "Rodriguez", "Sanchez", "Ramirez", "Cruz", "Flores", "Gomez"]
 
-# --- LÓGICA DE GENERACIÓN SEPARADA PARA COPIADO FÁCIL ---
 def generar_lote_correos(cantidad=10):
     lote = []
     for _ in range(cantidad):
@@ -254,14 +252,26 @@ def renovar_venta_popup(idx, row):
     if tipo_cta == "Asignar cuenta nueva (Rotativa)":
         ca, cb = st.columns(2)
         tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
-        if row['Producto'] == "YouTube Premium" and tiene_acceso_inventario:
-            disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
-            if not disponibles.empty:
-                sug = disponibles.iloc[0]
-                with ca: mv = st.text_input("Nuevo Correo (Automático)", value=sug['Correo'])
-                with cb: pv = st.text_input("Nueva Clave", value=sug['Password'])
+        
+        if row['Producto'] == "YouTube Premium":
+            if tiene_acceso_inventario:
+                disponibles = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
+                if not disponibles.empty:
+                    sug = disponibles.iloc[0]
+                    with ca: mv = st.text_input("Nuevo Correo (Automático)", value=sug['Correo'])
+                    with cb: pv = st.text_input("Nueva Clave", value=sug['Password'])
+                else:
+                    st.warning("No hay cupos en inventario.")
+                    with ca: mv = st.text_input("Nuevo Correo Manual")
+                    with cb: pv = st.text_input("Nueva Clave Manual")
             else:
-                st.warning("No hay cupos en inventario.")
+                # --- UPSELL PARA RENOVAR ---
+                st.warning("🚀 **¡Automatiza tus renovaciones!**")
+                st.caption("No pierdas tiempo creando cuentas. Obtén acceso a la bóveda de YouTube por solo **S/ 5.00**.")
+                msj_up = f"Hola Admin, soy {st.session_state.user}. Quiero activar mi acceso a la bóveda de YouTube Premium por S/ 5.00."
+                st.link_button("📲 Solicitar Activación al Admin", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up)}", use_container_width=True)
+                
+                st.info("Por ahora, ingresa los datos de la cuenta que creaste manualmente:")
                 with ca: mv = st.text_input("Nuevo Correo Manual")
                 with cb: pv = st.text_input("Nueva Clave Manual")
         else:
@@ -337,9 +347,15 @@ def nueva_venta_popup():
                 with ca: mv = st.text_input("Correo")
                 with cb: pv = st.text_input("Pass")
         else:
-            st.info("Ingresa la cuenta asignada.")
-            with ca: mv = st.text_input("Correo")
-            with cb: pv = st.text_input("Clave")
+            # --- UPSELL PARA NUEVA VENTA ---
+            st.warning("🚀 **¡Automatiza tus ventas!**")
+            st.caption("Obtén acceso a la bóveda de cuentas YouTube por solo **S/ 5.00** y olvídate de crear correos a mano.")
+            msj_up = f"Hola Admin, soy {st.session_state.user}. Quiero activar mi acceso a la bóveda de YouTube Premium por S/ 5.00."
+            st.link_button("📲 Solicitar Activación al Admin", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up)}", use_container_width=True)
+            
+            st.info("Por ahora, ingresa los datos de la cuenta que creaste manualmente:")
+            with ca: mv = st.text_input("Correo Manual")
+            with cb: pv = st.text_input("Clave Manual")
     else: 
         with ca: mv = st.text_input("Correo")
         with cb: pv = st.text_input("Pass")
@@ -355,6 +371,13 @@ def nueva_venta_popup():
 with st.sidebar:
     st.title("🚀 NEXA-Stream")
     st.caption(f"👤 {st.session_state.user} | Nivel: {st.session_state.role}")
+    
+    # --- UPSELL EN EL MENÚ LATERAL (Constante) ---
+    if st.session_state.role != "Admin" and st.session_state.acceso_yt == "No":
+        st.info("🔓 **Mejora tu cuenta**\n\nAccede a la bóveda automática de YouTube por **S/ 5.00**.")
+        msj_up_menu = f"Hola Admin, soy {st.session_state.user}. Quiero adquirir el acceso a la bóveda de YouTube por S/ 5.00."
+        st.link_button("📲 Solicitar Acceso", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up_menu)}", use_container_width=True)
+        
     st.divider()
     
     menu_opciones = ["📊 Panel de Ventas", "📈 Dashboard", "📂 Ex-Clientes"]
@@ -523,21 +546,16 @@ elif menu == "📂 Ex-Clientes":
 elif menu == "📦 Inventario YT":
     st.header("Inventario YouTube")
     
-    # --- ASISTENTE DE CREACIÓN MASIVA CON UI MÓVIL ---
     with st.expander("⚡ Asistente de Creación Masiva", expanded=True):
         st.info("💡 Toca el ícono de copiar al lado de cada bloque para pegarlo directamente en Google.")
-        
         if st.button("🔄 Generar 10 Perfiles", use_container_width=True):
             st.session_state.temp_emails = generar_lote_correos(10)
             st.rerun()
-            
         if st.session_state.temp_emails:
             st.write("---")
             for i, acc in enumerate(st.session_state.temp_emails):
                 with st.container(border=True):
                     st.write(f"👤 **{acc['Nombre']} {acc['Apellido']}**")
-                    
-                    # Interfaz en 2 columnas para copiado rápido en móvil
                     c1, c2 = st.columns(2)
                     with c1:
                         st.caption("Nombre:")
@@ -553,7 +571,6 @@ elif menu == "📦 Inventario YT":
                     if st.button("🗑️ Borrar (Google bloqueó)", key=f"del_tmp_{i}", use_container_width=True):
                         st.session_state.temp_emails.pop(i)
                         st.rerun()
-            
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
@@ -565,7 +582,6 @@ elif menu == "📦 Inventario YT":
                 
     st.write("---")
     
-    # --- INVENTARIO NORMAL ---
     if st.button("➕ NUEVO CORREO MANUAL", type="primary", use_container_width=True):
         @st.dialog("Registrar Correo")
         def add():
