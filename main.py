@@ -12,7 +12,7 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.13 (Botones Descriptivos y Diseño Nativo)"
+VERSION_APP = "1.16 (Pop-ups de Alerta Automáticos)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
@@ -24,11 +24,23 @@ st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_side
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    /* Diseño limpio y responsivo para los botones con texto */
+    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important;
+    }
+    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        width: 25% !important; min-width: 0 !important; flex: 1 1 0px !important;
+    }
+    /* Estilo botones pop-up de alerta (2 columnas) */
+    .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important;
+    }
+    .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        width: 50% !important; min-width: 0 !important; flex: 1 1 0px !important;
+    }
     .stButton>button, .stLinkButton>a {
         border-radius: 8px !important; height: 38px !important; padding: 0px !important;
         display: flex !important; align-items: center !important; justify-content: center !important;
-        width: 100% !important; font-size: 15px !important; margin-bottom: 5px !important;
+        width: 100% !important; font-size: 16px !important; margin: 0px !important;
     }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 8px; height: 38px; }
@@ -106,6 +118,11 @@ def limpiar_whatsapp(numero):
 
 plantillas_wa = load_templates()
 
+MESES_NOMBRES = {'01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril', '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto', '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'}
+def formatear_mes_anio(yyyy_mm):
+    y, m = yyyy_mm.split('-')
+    return f"{MESES_NOMBRES[m]} {y}"
+
 # ==============================================================================
 # BLOQUE 4: SISTEMA DE LOGIN Y SESIÓN
 # ==============================================================================
@@ -114,6 +131,8 @@ if 'logged_in' not in st.session_state:
     st.session_state.user = ""
     st.session_state.role = ""
     st.session_state.acceso_yt = "No"
+    # Bandera para que el popup solo salga 1 vez al entrar
+    st.session_state.alertas_vistas = False 
 
 if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
 if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = None
@@ -139,23 +158,74 @@ if not st.session_state.logged_in:
                 st.session_state.user = match.iloc[0]['Usuario']
                 st.session_state.role = match.iloc[0]['Rol']
                 st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
+                st.session_state.alertas_vistas = False # Reinicia al loguear
                 st.rerun()
             else:
                 st.error("❌ Credenciales incorrectas.")
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN Y RENOVACIONES
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN Y POP-UP URGENTE
 # ==============================================================================
+
+# --- NUEVO: DIÁLOGO DE ALERTAS AUTOMÁTICAS ---
+@st.dialog("⏰ Centro de Cobranza Urgente")
+def mostrar_popup_alertas(df_urgente, hoy):
+    st.warning("⚠️ **ATENCIÓN:** Los siguientes clientes requieren gestión inmediata.")
+    st.write("---")
+    
+    for idx, row in df_urgente.sort_values(by="Vencimiento").iterrows():
+        dias = (row['Vencimiento'] - hoy).days
+        
+        # Lógica exacta de días requerida
+        if dias == 3: estado_txt = "🟠 Vence en 3 días"
+        elif dias == 2: estado_txt = "🟠 Vence en 2 días"
+        elif dias == 1: estado_txt = "🟠 Vence en 1 día"
+        elif dias == 0: estado_txt = "🔴 VENCE HOY (Último día)"
+        elif dias == -1: estado_txt = "🔴 Se venció hace 1 día"
+        elif -7 < dias < -1: estado_txt = f"🔴 Se venció hace {abs(dias)} días"
+        elif -15 < dias <= -7: estado_txt = "⚫ Vencido hace MÁS de 7 días"
+        else: estado_txt = "⚫ Vencido hace MÁS de 15 días"
+
+        if dias <= 0: texto_base = plantillas_wa["vencido"]
+        else: texto_base = plantillas_wa["recordatorio"]
+            
+        texto_wa = texto_base.replace("{cliente}", str(row['Cliente'])).replace("{producto}", str(row['Producto'])).replace("{vencimiento}", str(row['Vencimiento']))
+        wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
+        
+        with st.container(border=True):
+            st.write(f"**{row['Cliente']}** | 📺 {row['Producto']}")
+            st.caption(f"**Estado:** {estado_txt}")
+            st.caption(f"📧 {row['Correo']} | 🔑 {row['Pass']}")
+            
+            st.markdown('<div class="fila-alerta"></div>', unsafe_allow_html=True)
+            ca1, ca2 = st.columns(2)
+            with ca1:
+                st.link_button("📲 Enviar Mensaje", wa_url, use_container_width=True)
+            with ca2:
+                if st.button("🗑️ Enviar a Papelera", key=f"alerta_del_{idx}", use_container_width=True):
+                    # Lógica para mandar a ex-clientes
+                    global df_ex_clientes, df_ventas
+                    df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
+                    df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
+                    df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False)
+                    st.rerun()
+
+    st.write("---")
+    if st.button("Entendido, cerrar por ahora", type="primary", use_container_width=True):
+        st.session_state.alertas_vistas = True
+        st.rerun()
+
 @st.dialog("🔄 Renovar Suscripción")
 def renovar_venta_popup(idx, row):
     st.write(f"Renovando cuenta de: **{row['Cliente']}** (📺 {row['Producto']})")
+    if row['Producto'] == "YouTube Premium":
+        st.error(f"⚠️ **IMPORTANTE:** No te olvides de sacar el correo actual (**{row['Correo']}**) del grupo familiar existente ANTES de realizar esta renovación. Si no lo haces, el correo quedará bloqueado y no podrás usarlo para otro cliente.")
+        
     dur = st.radio("Plazo de renovación:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
-    
     hoy = datetime.now().date()
     venc_actual = pd.to_datetime(row['Vencimiento']).date()
     fecha_base = max(hoy, venc_actual) 
-    
     if dur == "1 Mes": nueva_fecha = fecha_base + timedelta(days=30)
     elif dur == "2 Meses": nueva_fecha = fecha_base + timedelta(days=60)
     elif dur == "6 Meses": nueva_fecha = fecha_base + timedelta(days=180)
@@ -163,7 +233,6 @@ def renovar_venta_popup(idx, row):
     
     st.info(f"📅 El nuevo vencimiento será el: **{nueva_fecha}**")
     st.divider()
-    
     tipo_cta = st.radio("Credenciales para este nuevo periodo:", ["Mantener la misma cuenta", "Asignar cuenta nueva (Rotativa)"], horizontal=True)
     mv, pv = row['Correo'], row['Pass'] 
     
@@ -286,17 +355,12 @@ with st.sidebar:
         st.rerun()
 
 # ==============================================================================
-# VISTAS PRINCIPALES (DISEÑO MÓVIL ESTANDARIZADO)
+# VISTAS PRINCIPALES
 # ==============================================================================
 
 if menu == "📊 Panel de Ventas":
     st.header("Gestión de Suscripciones")
     
-    if st.session_state.role == "Admin":
-        cupos_disponibles = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
-        if cupos_disponibles <= 2:
-            st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos de YouTube Premium automáticos.")
-
     if st.session_state.role == "Admin":
         filtro_admin = st.selectbox("Vista de datos:", ["Todos los vendedores", f"Solo mis ventas ({st.session_state.user})"])
         df_mostrar = df_ventas if filtro_admin == "Todos los vendedores" else df_ventas[df_ventas['Vendedor'] == st.session_state.user]
@@ -304,13 +368,26 @@ if menu == "📊 Panel de Ventas":
         df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
     hoy = datetime.now().date()
-    
-    h1, h2 = st.columns([1, 2])
+
+    # --- LÓGICA DE POP-UP ALERTA URGENTE ---
+    if not df_mostrar.empty:
+        df_urgente = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)]
+        
+        # Si no la ha visto y hay clientes urgentes, se abre automáticamente
+        if not st.session_state.alertas_vistas and not df_urgente.empty:
+            mostrar_popup_alertas(df_urgente, hoy)
+        
+    # --- BOTONERA SUPERIOR ---
+    h1, h2 = st.columns(2)
     with h1: 
         if st.button("➕ NUEVA VENTA", type="primary", use_container_width=True): nueva_venta_popup()
     with h2: 
-        search = st.text_input("", placeholder="🔍 Buscar cliente...", label_visibility="collapsed")
-        
+        # Botón para volver a ver las alertas si el usuario las cerró
+        if st.button("🔔 Ver Alertas Urgentes", use_container_width=True):
+            st.session_state.alertas_vistas = False
+            st.rerun()
+            
+    search = st.text_input("", placeholder="🔍 Buscar cliente...", label_visibility="collapsed")
     c_f1, c_f2 = st.columns(2)
     filtro_plat = c_f1.selectbox("Plataforma", ["Todas"] + lista_plataformas, label_visibility="collapsed")
     filtro_est = c_f2.selectbox("Estado", ["Todos", "🟢 Activos", "🟠 Por Vencer (3 días)", "🔴 Vencidos"], label_visibility="collapsed")
@@ -345,14 +422,14 @@ if menu == "📊 Panel de Ventas":
                 
                 st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
                 st.caption(f"📧 {row['Correo']} | 📅 {row['Vencimiento']}{vendedor_badge}")
-                
-                # Botones ahora con texto explicativo usando columnas de Streamlit nativas
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    st.link_button("📲 Notificar", wa_url, use_container_width=True)
-                    if st.button("📝 Editar", key=f"e_{idx}", use_container_width=True): editar_venta_popup(idx, row)
-                with btn_col2:
+                st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
+                cols = st.columns(4)
+                with cols[0]: st.link_button("📲 Notificar", wa_url, use_container_width=True)
+                with cols[1]: 
                     if st.button("🔄 Renovar", key=f"r_{idx}", use_container_width=True): renovar_venta_popup(idx, row)
+                with cols[2]: 
+                    if st.button("📝 Editar", key=f"e_{idx}", use_container_width=True): editar_venta_popup(idx, row)
+                with cols[3]:
                     if st.button("🗑️ Papelera", key=f"v_{idx}", use_container_width=True):
                         df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
                         df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
@@ -361,35 +438,54 @@ if menu == "📊 Panel de Ventas":
 
 elif menu == "📈 Dashboard":
     st.header("Análisis de Rendimiento")
-    if st.session_state.role == "Admin": df_dash = df_ventas
-    else: df_dash = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
+    
+    if st.session_state.role == "Admin": df_dash = df_ventas.copy()
+    else: df_dash = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
         
-    if df_dash.empty: st.warning("No hay suficientes datos.")
+    if df_dash.empty: 
+        st.warning("No hay suficientes datos.")
     else:
-        df_dash['Costo'] = pd.to_numeric(df_dash['Costo'], errors='coerce').fillna(0)
-        df_dash['Precio'] = pd.to_numeric(df_dash['Precio'], errors='coerce').fillna(0)
-        total_ingresos = df_dash['Precio'].sum()
-        total_costos = df_dash['Costo'].sum()
-        total_ganancia = total_ingresos - total_costos
-        total_clientes = len(df_dash)
+        df_dash['Vencimiento_dt'] = pd.to_datetime(df_dash['Vencimiento'], errors='coerce')
+        df_dash['Periodo'] = df_dash['Vencimiento_dt'].dt.strftime('%Y-%m')
+        periodos_disponibles = sorted(df_dash['Periodo'].dropna().unique().tolist(), reverse=True)
         
-        c1, c2 = st.columns(2)
-        c1.metric("👥 Clientes", f"{total_clientes}")
-        c2.metric("💰 Ventas", f"${total_ingresos:.2f}")
-        c3, c4 = st.columns(2)
-        c3.metric("📉 Costos", f"${total_costos:.2f}")
-        c4.metric("🚀 GANANCIA", f"${total_ganancia:.2f}")
+        opciones_periodos = ["Histórico Global"] + periodos_disponibles
+        formato_opciones = lambda x: "Histórico Global (Todo)" if x == "Histórico Global" else formatear_mes_anio(x)
         
-        st.divider()
-        st.subheader("Distribución por Plataforma")
-        ventas_plat = df_dash['Producto'].value_counts().reset_index()
-        ventas_plat.columns = ['Plataforma', 'Cantidad']
-        grafico_anillo = alt.Chart(ventas_plat).mark_arc(innerRadius=60).encode(
-            theta=alt.Theta(field="Cantidad", type="quantitative"),
-            color=alt.Color(field="Plataforma", type="nominal", legend=alt.Legend(title="Plataformas", orient="bottom")),
-            tooltip=['Plataforma', 'Cantidad']
-        ).properties(height=350).configure_view(strokeWidth=0)
-        st.altair_chart(grafico_anillo, use_container_width=True)
+        periodo_sel = st.selectbox("📅 Selecciona el periodo:", opciones_periodos, format_func=formato_opciones)
+        
+        if periodo_sel != "Histórico Global":
+            df_dash = df_dash[df_dash['Periodo'] == periodo_sel]
+            
+        st.write("---")
+        
+        if df_dash.empty:
+            st.info("No hay ventas registradas para este periodo exacto.")
+        else:
+            df_dash['Costo'] = pd.to_numeric(df_dash['Costo'], errors='coerce').fillna(0)
+            df_dash['Precio'] = pd.to_numeric(df_dash['Precio'], errors='coerce').fillna(0)
+            total_ingresos = df_dash['Precio'].sum()
+            total_costos = df_dash['Costo'].sum()
+            total_ganancia = total_ingresos - total_costos
+            total_clientes = len(df_dash)
+            
+            c1, c2 = st.columns(2)
+            c1.metric("👥 Clientes del periodo", f"{total_clientes}")
+            c2.metric("💰 Ventas Brutas", f"${total_ingresos:.2f}")
+            c3, c4 = st.columns(2)
+            c3.metric("📉 Costos", f"${total_costos:.2f}")
+            c4.metric("🚀 GANANCIA NETA", f"${total_ganancia:.2f}")
+            
+            st.divider()
+            st.subheader("Distribución por Plataforma")
+            ventas_plat = df_dash['Producto'].value_counts().reset_index()
+            ventas_plat.columns = ['Plataforma', 'Cantidad']
+            grafico_anillo = alt.Chart(ventas_plat).mark_arc(innerRadius=60).encode(
+                theta=alt.Theta(field="Cantidad", type="quantitative"),
+                color=alt.Color(field="Plataforma", type="nominal", legend=alt.Legend(title="Plataformas", orient="bottom")),
+                tooltip=['Plataforma', 'Cantidad']
+            ).properties(height=350).configure_view(strokeWidth=0)
+            st.altair_chart(grafico_anillo, use_container_width=True)
 
 elif menu == "📂 Ex-Clientes":
     st.header("Historial y Papelera")
@@ -418,6 +514,7 @@ elif menu == "📦 Inventario YT":
     for idx, row in df_inv.iterrows():
         with st.container(border=True):
             st.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
+            st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("📝 Editar", key=f"ei_{idx}", use_container_width=True): 
@@ -492,6 +589,7 @@ elif menu == "👥 Vendedores":
             with st.container(border=True):
                 st.write(f"👤 **{row['Usuario']}** | 📱 {row['Telefono']}")
                 st.caption(f"🔑 Clave: {row['Password']} | 📺 Auto-asignar YT: **{row['Acceso_YT']}**")
+                st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
                 c_edit, c_del = st.columns(2)
                 with c_edit:
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
@@ -501,19 +599,21 @@ elif menu == "👥 Vendedores":
 
 elif menu == "⚙️ Configuración":
     st.header("Configuración del Sistema")
-    st.subheader("📝 Editar Plantillas de WhatsApp")
-    st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
-    with st.form("form_plantillas"):
-        rec = st.text_area("1️⃣ Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa["recordatorio"], height=80)
-        ven = st.text_area("2️⃣ Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa["vencido"], height=80)
-        ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa["vendedor"], height=100)
-        if st.form_submit_button("💾 Guardar Plantillas", type="primary", use_container_width=True):
-            plantillas_wa["recordatorio"] = rec
-            plantillas_wa["vencido"] = ven
-            plantillas_wa["vendedor"] = ven_new
-            save_templates(plantillas_wa)
-            st.success("¡Plantillas guardadas y activas!")
-            st.rerun()
+    
+    with st.expander("📝 Editar Plantillas de WhatsApp", expanded=False):
+        st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
+        with st.form("form_plantillas"):
+            rec = st.text_area("1️⃣ Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa["recordatorio"], height=80)
+            ven = st.text_area("2️⃣ Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa["vencido"], height=80)
+            ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa["vendedor"], height=100)
+            if st.form_submit_button("💾 Guardar Plantillas", type="primary", use_container_width=True):
+                plantillas_wa["recordatorio"] = rec
+                plantillas_wa["vencido"] = ven
+                plantillas_wa["vendedor"] = ven_new
+                save_templates(plantillas_wa)
+                st.success("¡Plantillas guardadas y activas!")
+                st.rerun()
+                
     st.divider()
     st.subheader("🛠 Plataformas")
     c_plat, c_pbtn = st.columns([3, 1])
