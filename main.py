@@ -12,27 +12,18 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.18"
+VERSION_APP = "1.19 (Asistente Generador de Correos)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
 st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_sidebar_state="expanded")
 
-# --- INYECCIÓN DEL NÚMERO DE VERSIÓN EN LA ESQUINA SUPERIOR DERECHA ---
 st.markdown(f"""
     <style>
     .version-corner {{
-        position: fixed;
-        top: 15px;
-        right: 70px; /* Separado del menú de Streamlit */
-        background-color: rgba(40, 40, 40, 0.8);
-        color: #aaaaaa;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: bold;
-        z-index: 999999;
-        pointer-events: none;
+        position: fixed; top: 15px; right: 70px; background-color: rgba(40, 40, 40, 0.8);
+        color: #aaaaaa; padding: 4px 10px; border-radius: 12px; font-size: 12px;
+        font-weight: bold; z-index: 999999; pointer-events: none;
     }}
     </style>
     <div class="version-corner">v{VERSION_APP}</div>
@@ -68,7 +59,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: FUNCIONES DE DATOS, SEGURIDAD Y PLANTILLAS
+# BLOQUE 3: FUNCIONES DE DATOS Y PLANTILLAS
 # ==============================================================================
 VENTAS_FILE = "ventas_data.csv"
 INV_FILE = "inventario_yt.csv"
@@ -86,22 +77,35 @@ DEFAULT_TEMPLATES = {
 def load_templates():
     if os.path.exists(WA_TEMPLATES_FILE):
         try:
-            with open(WA_TEMPLATES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+            with open(WA_TEMPLATES_FILE, "r", encoding="utf-8") as f: return json.load(f)
         except: return DEFAULT_TEMPLATES
     return DEFAULT_TEMPLATES
 
 def save_templates(templates_dict):
-    with open(WA_TEMPLATES_FILE, "w", encoding="utf-8") as f:
-        json.dump(templates_dict, f, ensure_ascii=False, indent=4)
+    with open(WA_TEMPLATES_FILE, "w", encoding="utf-8") as f: json.dump(templates_dict, f, ensure_ascii=False, indent=4)
 
-def generar_password_aleatoria(longitud=6):
-    caracteres = string.ascii_uppercase + string.digits
+def generar_password_aleatoria(longitud=8): # Más robusta para Google
+    caracteres = string.ascii_letters + string.digits
     return ''.join(random.choice(caracteres) for i in range(longitud))
 
 def generar_usuario(nombre):
     base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower())
     return f"{base}{random.randint(100, 999)}"
+
+# Base de nombres para el generador
+NOMBRES = ["Juan", "Carlos", "Jose", "Luis", "David", "Javier", "Daniel", "Maria", "Ana", "Rosa", "Carmen", "Sofia", "Lucia"]
+APELLIDOS = ["Garcia", "Martinez", "Lopez", "Gonzalez", "Perez", "Rodriguez", "Sanchez", "Ramirez", "Cruz", "Flores", "Gomez"]
+
+def generar_lote_correos(cantidad=10):
+    lote = []
+    for _ in range(cantidad):
+        n = random.choice(NOMBRES)
+        a = random.choice(APELLIDOS)
+        num = random.randint(1000, 9999)
+        correo = f"{n.lower()}.{a.lower()}.prem{num}@gmail.com"
+        pwd = generar_password_aleatoria()
+        lote.append({"Nombre": f"{n} {a}", "Correo": correo, "Pass": pwd})
+    return lote
 
 def cargar_datos():
     if os.path.exists(VENTAS_FILE):
@@ -112,20 +116,15 @@ def cargar_datos():
         if 'Costo' not in df.columns: df['Costo'] = 0.0; cambios = True
         if 'Precio' not in df.columns: df['Precio'] = 0.0; cambios = True
         if cambios: df.to_csv(VENTAS_FILE, index=False)
-    else:
-        df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio"])
-    
+    else: df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio"])
     if os.path.exists(EX_CLIENTES_FILE): df_ex = pd.read_csv(EX_CLIENTES_FILE)
     else: df_ex = pd.DataFrame(columns=df.columns)
-
     if os.path.exists(INV_FILE): inv = pd.read_csv(INV_FILE)
     else: inv = pd.DataFrame(columns=["Correo", "Password", "Usos", "Asignado_A"])
-        
     if os.path.exists(PLAT_FILE): plat = pd.read_csv(PLAT_FILE)['Nombre'].tolist()
     else:
         plat = ["YouTube Premium", "Netflix", "Disney+", "Google One", "Spotify"]
         pd.DataFrame(plat, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
-        
     return df, df_ex, inv, plat
 
 df_ventas, df_ex_clientes, df_inv, lista_plataformas = cargar_datos()
@@ -136,7 +135,6 @@ def limpiar_whatsapp(numero):
     return solo_numeros
 
 plantillas_wa = load_templates()
-
 MESES_NOMBRES = {'01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril', '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto', '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'}
 def formatear_mes_anio(yyyy_mm):
     y, m = yyyy_mm.split('-')
@@ -151,6 +149,7 @@ if 'logged_in' not in st.session_state:
     st.session_state.role = ""
     st.session_state.acceso_yt = "No"
     st.session_state.alertas_vistas = False 
+    st.session_state.temp_emails = [] # Memoria del generador de correos
 
 if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
 if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = None
@@ -164,7 +163,6 @@ df_usuarios = pd.read_csv(USUARIOS_FILE)
 
 if not st.session_state.logged_in:
     st.title("🔐 Portal NEXA-Stream")
-    st.caption(f"Versión: {VERSION_APP}")
     with st.container(border=True):
         st.subheader("Iniciar Sesión")
         u_in = st.text_input("Usuario")
@@ -178,8 +176,7 @@ if not st.session_state.logged_in:
                 st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
                 st.session_state.alertas_vistas = False
                 st.rerun()
-            else:
-                st.error("❌ Credenciales incorrectas.")
+            else: st.error("❌ Credenciales incorrectas.")
     st.stop()
 
 # ==============================================================================
@@ -375,26 +372,20 @@ if menu == "📊 Panel de Ventas":
         if cupos_disponibles <= 2:
             st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos de YouTube Premium automáticos.")
 
-    # --- NUEVO FILTRO DE VENDEDORES TIPO EXCEL ---
     if st.session_state.role == "Admin":
         tipo_filtro = st.selectbox("👥 Filtro de Vendedores:", 
             ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."])
             
-        if tipo_filtro == "🌎 Mostrar Todos":
-            df_mostrar = df_ventas
-        elif tipo_filtro == "👥 Todos sin Admin":
-            df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
-        elif tipo_filtro == "👑 Solo Admin":
-            df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
+        if tipo_filtro == "🌎 Mostrar Todos": df_mostrar = df_ventas
+        elif tipo_filtro == "👥 Todos sin Admin": df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
+        elif tipo_filtro == "👑 Solo Admin": df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
         else:
             lista_v = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
             vend_sel = st.multiselect("Marca los vendedores a consultar:", lista_v, default=lista_v)
             df_mostrar = df_ventas[df_ventas['Vendedor'].isin(vend_sel)]
-    else:
-        df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
+    else: df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
     hoy = datetime.now().date()
-
     if not df_mostrar.empty:
         df_urgente = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)]
         if not st.session_state.alertas_vistas and not df_urgente.empty:
@@ -413,11 +404,8 @@ if menu == "📊 Panel de Ventas":
     filtro_plat = c_f1.selectbox("Plataforma", ["Todas"] + lista_plataformas, label_visibility="collapsed")
     filtro_est = c_f2.selectbox("Estado", ["Todos", "🟢 Activos", "🟠 Por Vencer (3 días)", "🔴 Vencidos"], label_visibility="collapsed")
 
-    if search:
-        mask_search = df_mostrar.apply(lambda r: search.lower() in str(r).lower(), axis=1)
-        df_mostrar = df_mostrar[mask_search]
-    if filtro_plat != "Todas":
-        df_mostrar = df_mostrar[df_mostrar['Producto'] == filtro_plat]
+    if search: mask_search = df_mostrar.apply(lambda r: search.lower() in str(r).lower(), axis=1); df_mostrar = df_mostrar[mask_search]
+    if filtro_plat != "Todas": df_mostrar = df_mostrar[df_mostrar['Producto'] == filtro_plat]
     if filtro_est != "Todos":
         if filtro_est == "🟢 Activos": df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date > hoy + timedelta(days=3)]
         elif filtro_est == "🟠 Por Vencer (3 días)":
@@ -440,7 +428,6 @@ if menu == "📊 Panel de Ventas":
             
             with st.container(border=True):
                 vendedor_badge = f" 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" else ""
-                
                 st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
                 st.caption(f"📧 {row['Correo']} | 📅 {row['Vencimiento']}{vendedor_badge}")
                 st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
@@ -463,41 +450,29 @@ elif menu == "📈 Dashboard":
     if st.session_state.role == "Admin": 
         tipo_filtro_dash = st.selectbox("👥 Filtro de Vendedores:", 
             ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."], key="filt_dash")
-            
-        if tipo_filtro_dash == "🌎 Mostrar Todos":
-            df_dash_base = df_ventas.copy()
-        elif tipo_filtro_dash == "👥 Todos sin Admin":
-            df_dash_base = df_ventas[df_ventas['Vendedor'] != st.session_state.user].copy()
-        elif tipo_filtro_dash == "👑 Solo Admin":
-            df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
+        if tipo_filtro_dash == "🌎 Mostrar Todos": df_dash_base = df_ventas.copy()
+        elif tipo_filtro_dash == "👥 Todos sin Admin": df_dash_base = df_ventas[df_ventas['Vendedor'] != st.session_state.user].copy()
+        elif tipo_filtro_dash == "👑 Solo Admin": df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
         else:
             lista_v = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
             vend_sel_dash = st.multiselect("Marca los vendedores:", lista_v, default=lista_v, key="mult_dash")
             df_dash_base = df_ventas[df_ventas['Vendedor'].isin(vend_sel_dash)].copy()
-    else: 
-        df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
+    else: df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
         
-    if df_dash_base.empty: 
-        st.warning("No hay suficientes datos registrados.")
+    if df_dash_base.empty: st.warning("No hay suficientes datos registrados.")
     else:
         df_dash_base['Vencimiento_dt'] = pd.to_datetime(df_dash_base['Vencimiento'], errors='coerce')
         df_dash_base['Periodo'] = df_dash_base['Vencimiento_dt'].dt.strftime('%Y-%m')
         periodos_disponibles = sorted(df_dash_base['Periodo'].dropna().unique().tolist(), reverse=True)
-        
         opciones_periodos = ["Histórico Global"] + periodos_disponibles
         formato_opciones = lambda x: "Histórico Global (Todo)" if x == "Histórico Global" else formatear_mes_anio(x)
-        
         periodo_sel = st.selectbox("📅 Selecciona el periodo mensual:", opciones_periodos, format_func=formato_opciones)
         
-        if periodo_sel != "Histórico Global":
-            df_dash = df_dash_base[df_dash_base['Periodo'] == periodo_sel]
-        else:
-            df_dash = df_dash_base
+        if periodo_sel != "Histórico Global": df_dash = df_dash_base[df_dash_base['Periodo'] == periodo_sel]
+        else: df_dash = df_dash_base
             
         st.write("---")
-        
-        if df_dash.empty:
-            st.info("No hay ventas registradas en este periodo y/o por los vendedores seleccionados.")
+        if df_dash.empty: st.info("No hay ventas registradas en este periodo y/o por los vendedores seleccionados.")
         else:
             df_dash['Costo'] = pd.to_numeric(df_dash['Costo'], errors='coerce').fillna(0)
             df_dash['Precio'] = pd.to_numeric(df_dash['Precio'], errors='coerce').fillna(0)
@@ -538,7 +513,41 @@ elif menu == "📂 Ex-Clientes":
 
 elif menu == "📦 Inventario YT":
     st.header("Inventario YouTube")
-    if st.button("➕ NUEVO CORREO", type="primary", use_container_width=True):
+    
+    # --- ASISTENTE DE CREACIÓN MASIVA ---
+    with st.expander("⚡ Asistente de Creación Masiva (Generador de Datos)", expanded=True):
+        st.info("Genera perfiles ficticios para copiarlos y crear cuentas en Google. Borra las que no te dejen crear y guarda el resto.")
+        
+        if st.button("🔄 Generar 10 Perfiles Nuevos", use_container_width=True):
+            st.session_state.temp_emails = generar_lote_correos(10)
+            st.rerun()
+            
+        if st.session_state.temp_emails:
+            st.write("---")
+            st.write("📋 **Cuentas en Sala de Espera:**")
+            
+            # Mostrar cuentas temporales con botón de borrar individual
+            for i, acc in enumerate(st.session_state.temp_emails):
+                with st.container(border=True):
+                    st.write(f"👤 **{acc['Nombre']}**")
+                    st.code(f"Correo: {acc['Correo']}\nClave: {acc['Pass']}")
+                    if st.button("🗑️ Eliminar porque Google bloqueó la IP", key=f"del_tmp_{i}", use_container_width=True):
+                        st.session_state.temp_emails.pop(i)
+                        st.rerun()
+            
+            st.write("---")
+            if st.button("✅ Confirmar y Guardar estas cuentas en Inventario", type="primary", use_container_width=True):
+                nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
+                df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
+                df_inv.to_csv(INV_FILE, index=False)
+                st.session_state.temp_emails = [] # Limpiar memoria
+                st.success("¡Cuentas añadidas exitosamente al inventario!")
+                st.rerun()
+                
+    st.write("---")
+
+    # --- INVENTARIO NORMAL ---
+    if st.button("➕ NUEVO CORREO MANUAL", type="primary", use_container_width=True):
         @st.dialog("Registrar Correo")
         def add():
             m = st.text_input("Gmail")
@@ -636,7 +645,6 @@ elif menu == "👥 Vendedores":
 
 elif menu == "⚙️ Configuración":
     st.header("Configuración del Sistema")
-    
     with st.expander("📝 Editar Plantillas de WhatsApp", expanded=False):
         st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
         with st.form("form_plantillas"):
@@ -650,7 +658,6 @@ elif menu == "⚙️ Configuración":
                 save_templates(plantillas_wa)
                 st.success("¡Plantillas guardadas y activas!")
                 st.rerun()
-                
     st.divider()
     st.subheader("🛠 Plataformas")
     c_plat, c_pbtn = st.columns([3, 1])
