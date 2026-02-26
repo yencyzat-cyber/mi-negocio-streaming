@@ -6,11 +6,12 @@ import re
 import random
 import string
 import altair as alt
+from urllib.parse import quote
 
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.8 (Dashboard Interactivo)"
+VERSION_APP = "1.9 (Filtros, Stock y WA Custom)"
 
 # ENLACE REAL DE TU APLICACIÓN
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
@@ -23,7 +24,6 @@ st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_side
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    /* Botones en 4 columnas (25% cada uno) para móvil */
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important;
     }
@@ -36,21 +36,32 @@ st.markdown("""
         width: 100% !important; font-size: 16px !important; margin: 0px !important;
     }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input { border-radius: 8px; height: 38px; }
-    div[data-testid="metric-container"] {
-        background-color: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 10px;
-    }
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 8px; height: 38px; }
+    div[data-testid="metric-container"] { background-color: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: FUNCIONES DE DATOS Y SEGURIDAD
+# BLOQUE 3: FUNCIONES DE DATOS, SEGURIDAD Y PLANTILLAS
 # ==============================================================================
 VENTAS_FILE = "ventas_data.csv"
 INV_FILE = "inventario_yt.csv"
 PLAT_FILE = "plataformas.csv"
 USUARIOS_FILE = "usuarios.csv"
 EX_CLIENTES_FILE = "ex_clientes.csv"
+WA_TEMPLATE_FILE = "wa_template.txt"
+
+DEFAULT_WA_MSG = "Hola {cliente}, tu cuenta de {producto} vence el {vencimiento}. ¿Deseas renovarlo?"
+
+def load_wa_template():
+    if os.path.exists(WA_TEMPLATE_FILE):
+        with open(WA_TEMPLATE_FILE, "r", encoding="utf-8") as f:
+            return f.read()
+    return DEFAULT_WA_MSG
+
+def save_wa_template(texto):
+    with open(WA_TEMPLATE_FILE, "w", encoding="utf-8") as f:
+        f.write(texto)
 
 def generar_password_aleatoria(longitud=6):
     caracteres = string.ascii_uppercase + string.digits
@@ -139,19 +150,16 @@ def editar_venta_popup(idx, row):
     nom = st.text_input("Nombre", value=row['Cliente'])
     tel = st.text_input("WhatsApp", value=row['WhatsApp'])
     venc = st.date_input("Vencimiento", row['Vencimiento'])
-    
     st.divider()
     c_costo, c_precio = st.columns(2)
     val_costo = float(row['Costo']) if not pd.isna(row.get('Costo')) else 0.0
     val_precio = float(row['Precio']) if not pd.isna(row.get('Precio')) else 0.0
     costo = c_costo.number_input("Costo (Lo que pagas)", value=val_costo, step=1.0)
     precio = c_precio.number_input("Precio de Venta", value=val_precio, step=1.0)
-    
     st.divider()
     m = st.text_input("Correo", value=row['Correo'])
     p = st.text_input("Pass", value=row['Pass'])
     perf = st.text_input("Perfil", value=row['Perfil'])
-    
     if st.button("ACTUALIZAR", type="primary", use_container_width=True):
         df_ventas.at[idx, 'Cliente'], df_ventas.at[idx, 'WhatsApp'] = nom, limpiar_whatsapp(tel)
         df_ventas.at[idx, 'Producto'], df_ventas.at[idx, 'Vencimiento'] = prod, venc
@@ -167,11 +175,9 @@ def nueva_venta_popup():
     with c2: f_ini = st.date_input("Inicio", datetime.now())
     nom = st.text_input("Nombre Cliente")
     tel = st.text_input("WhatsApp (ej: 999888777)")
-    
     c_costo, c_precio = st.columns(2)
     costo = c_costo.number_input("Costo de la cuenta", value=0.0, step=1.0)
     precio = c_precio.number_input("Precio de Venta", value=0.0, step=1.0)
-    
     dur = st.radio("Plazo:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
     if dur == "1 Mes": venc = f_ini + timedelta(days=30)
     elif dur == "2 Meses": venc = f_ini + timedelta(days=60)
@@ -180,9 +186,7 @@ def nueva_venta_popup():
     
     st.divider()
     ca, cb = st.columns(2)
-    
     tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
-    
     if prod == "YouTube Premium":
         if tiene_acceso_inventario:
             if not df_inv.empty:
@@ -239,10 +243,16 @@ with st.sidebar:
 # VISTAS PRINCIPALES
 # ==============================================================================
 
-# --- VISTA 1: VENTAS Y ALERTAS ---
+# --- VISTA 1: VENTAS Y FILTROS ---
 if menu == "📊 Panel de Ventas":
     st.header("Gestión de Suscripciones")
     
+    # 🚨 ALERTA DE STOCK CRÍTICO (SOLO PARA ADMIN)
+    if st.session_state.role == "Admin":
+        cupos_disponibles = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
+        if cupos_disponibles <= 2:
+            st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos de YouTube Premium automáticos.")
+
     if st.session_state.role == "Admin":
         filtro_admin = st.selectbox("Vista de datos:", ["Todos los vendedores", f"Solo mis ventas ({st.session_state.user})"])
         df_mostrar = df_ventas if filtro_admin == "Todos los vendedores" else df_ventas[df_ventas['Vendedor'] == st.session_state.user]
@@ -250,32 +260,49 @@ if menu == "📊 Panel de Ventas":
         df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
     hoy = datetime.now().date()
-    if not df_mostrar.empty:
-        df_alertas = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)]
-        if not df_alertas.empty:
-            with st.expander(f"⚠️ ¡ATENCIÓN! Tienes {len(df_alertas)} cobros pendientes o próximos", expanded=True):
-                for idx, row in df_alertas.iterrows():
-                    dias_rest = (row['Vencimiento'] - hoy).days
-                    estado_txt = "🔴 VENCIDO" if dias_rest < 0 else ( "🔴 VENCE HOY" if dias_rest == 0 else f"🟠 Vence en {dias_rest} días")
-                    st.write(f"{estado_txt}: **{row['Cliente']}** ({row['Producto']}) - {row['WhatsApp']}")
-
+    
+    # --- BUSCADOR Y FILTROS MÚLTIPLES ---
     h1, h2 = st.columns([1, 2])
     with h1: 
         if st.button("➕ NUEVA VENTA", type="primary", use_container_width=True): nueva_venta_popup()
     with h2: 
         search = st.text_input("", placeholder="🔍 Buscar cliente...", label_visibility="collapsed")
-    
+        
+    c_f1, c_f2 = st.columns(2)
+    filtro_plat = c_f1.selectbox("Plataforma", ["Todas"] + lista_plataformas, label_visibility="collapsed")
+    filtro_est = c_f2.selectbox("Estado", ["Todos", "🟢 Activos", "🟠 Por Vencer (3 días)", "🔴 Vencidos"], label_visibility="collapsed")
+
+    # Aplicar Filtros a la Base de Datos
+    if search:
+        mask_search = df_mostrar.apply(lambda r: search.lower() in str(r).lower(), axis=1)
+        df_mostrar = df_mostrar[mask_search]
+    if filtro_plat != "Todas":
+        df_mostrar = df_mostrar[df_mostrar['Producto'] == filtro_plat]
+    if filtro_est != "Todos":
+        if filtro_est == "🟢 Activos":
+            df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date > hoy + timedelta(days=3)]
+        elif filtro_est == "🟠 Por Vencer (3 días)":
+            mask_vencer = (pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)) & (pd.to_datetime(df_mostrar['Vencimiento']).dt.date > hoy)
+            df_mostrar = df_mostrar[mask_vencer]
+        elif filtro_est == "🔴 Vencidos":
+            df_mostrar = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy]
+
     st.write("---")
+    
+    # Cargar la plantilla de WhatsApp personalizada
+    plantilla_wa = load_wa_template()
+
     if not df_mostrar.empty:
-        mask = df_mostrar.apply(lambda r: search.lower() in str(r).lower(), axis=1)
-        for idx, row in df_mostrar[mask].sort_values(by="Vencimiento").iterrows():
+        for idx, row in df_mostrar.sort_values(by="Vencimiento").iterrows():
             d = (row['Vencimiento'] - hoy).days
             col = "🔴" if d <= 0 else "🟠" if d <= 3 else "🟢"
             
             with st.container(border=True):
-                msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%0A%0A¿Deseas%20renovarlo?"
-                wa_url = f"https://wa.me/{row['WhatsApp']}?text={msj}"
-                vendedor_badge = f" 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" and filtro_admin == "Todos los vendedores" else ""
+                # Generador dinámico del mensaje de WhatsApp
+                texto_wa = plantilla_wa.replace("{cliente}", str(row['Cliente'])).replace("{producto}", str(row['Producto'])).replace("{vencimiento}", str(row['Vencimiento']))
+                wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
+                
+                vendedor_badge = f" 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" and 'filtro_admin' in locals() and filtro_admin == "Todos los vendedores" else ""
 
                 if vista == "📱 Móvil":
                     st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
@@ -310,9 +337,9 @@ if menu == "📊 Panel de Ventas":
                             df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
                             df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
                             df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
-    else: st.info("No hay registros activos.")
+    else: st.info("No hay registros que coincidan con los filtros.")
 
-# --- VISTA 2: DASHBOARD FINANCIERO CON GRÁFICO ---
+# --- VISTA 2: DASHBOARD FINANCIERO ---
 elif menu == "📈 Dashboard (Rendimiento)":
     st.header("Análisis de Rendimiento")
     
@@ -350,8 +377,6 @@ elif menu == "📈 Dashboard (Rendimiento)":
         
         st.divider()
         st.subheader("Distribución por Plataforma")
-        
-        # Generación del gráfico de anillo con Altair
         ventas_plat = df_dash['Producto'].value_counts().reset_index()
         ventas_plat.columns = ['Plataforma', 'Cantidad']
         
@@ -359,9 +384,7 @@ elif menu == "📈 Dashboard (Rendimiento)":
             theta=alt.Theta(field="Cantidad", type="quantitative"),
             color=alt.Color(field="Plataforma", type="nominal", legend=alt.Legend(title="Plataformas", orient="bottom")),
             tooltip=['Plataforma', 'Cantidad']
-        ).properties(
-            height=350
-        ).configure_view(strokeWidth=0)
+        ).properties(height=350).configure_view(strokeWidth=0)
         
         st.altair_chart(grafico_anillo, use_container_width=True)
 
@@ -436,10 +459,8 @@ elif menu == "👥 Gestión de Vendedores":
         pwd_gen = st.session_state.nuevo_vend_pwd
         nom_gen = st.session_state.nuevo_vend_nom
         tel_gen = st.session_state.nuevo_vend_tel
-        
         texto_wa = f"Hola Buenas noches {nom_gen}, aquí tienes tu acceso al sistema NEXA-Stream.%0A%0A👤 Usuario: {usr_gen}%0A🔑 Contraseña: {pwd_gen}%0A🌐 Link de acceso: {LINK_APP}"
         enlace_wa = f"https://wa.me/{tel_gen}?text={texto_wa}"
-        
         st.success("✅ ¡PERFIL CREADO CON ÉXITO!")
         st.info(f"**Usuario:** {usr_gen} | **Contraseña:** {pwd_gen}")
         col_wa, col_ok = st.columns(2)
@@ -461,7 +482,6 @@ elif menu == "👥 Gestión de Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
-                        
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         df_usuarios.to_csv(USUARIOS_FILE, index=False)
@@ -470,8 +490,7 @@ elif menu == "👥 Gestión de Vendedores":
                         st.session_state.nuevo_vend_nom = nuevo_nom
                         st.session_state.nuevo_vend_tel = tel_limpio
                         st.rerun()
-                    else:
-                        st.warning("⚠️ Llenar Nombre y Teléfono.")
+                    else: st.warning("⚠️ Llenar Nombre y Teléfono.")
     st.write("---")
     vendedores = df_usuarios[df_usuarios['Rol'] != 'Admin']
     if vendedores.empty: st.info("Sin vendedores.")
@@ -491,9 +510,20 @@ elif menu == "👥 Gestión de Vendedores":
 # --- VISTA 6: CONFIGURACIÓN GENERAL (SOLO ADMIN) ---
 elif menu == "⚙️ Configuración":
     st.header("Configuración del Sistema")
-    st.subheader("🛠 Plataformas")
+    
+    st.subheader("📝 Plantilla de Mensaje (WhatsApp)")
+    st.info("💡 Utiliza las etiquetas `{cliente}`, `{producto}` y `{vencimiento}`. El sistema las reemplazará automáticamente con los datos de cada cliente.")
+    plantilla_actual = load_wa_template()
+    nueva_plantilla = st.text_area("Edita tu mensaje aquí:", value=plantilla_actual, height=100)
+    if st.button("💾 Guardar Plantilla", type="primary"):
+        save_wa_template(nueva_plantilla)
+        st.success("¡Plantilla de WhatsApp actualizada con éxito!")
+        st.rerun()
+    
+    st.divider()
+    st.subheader("🛠 Plataformas Activas")
     c_plat, c_pbtn = st.columns([3, 1])
-    with c_plat: nueva_p = st.text_input("Nueva", label_visibility="collapsed")
+    with c_plat: nueva_p = st.text_input("Nueva plataforma", label_visibility="collapsed")
     with c_pbtn:
         if st.button("Añadir", use_container_width=True):
             if nueva_p and nueva_p not in lista_plataformas:
@@ -504,3 +534,7 @@ elif menu == "⚙️ Configuración":
         cp1.write(f"📺 {p}")
         if cp2.button("🗑️", key=f"del_p_{p}"):
             lista_plataformas.remove(p); pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False); st.rerun()
+            
+    st.divider()
+    st.subheader("💾 Copias de Seguridad")
+    st.download_button("📥 Descargar Backup Completo (Ventas)", df_ventas.to_csv(index=False).encode('utf-8'), "ventas_backup.csv", use_container_width=True)
