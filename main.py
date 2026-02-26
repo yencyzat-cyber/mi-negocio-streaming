@@ -12,7 +12,7 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.19 (Asistente Generador de Correos)"
+VERSION_APP = "1.20 (Copiado Rápido Móvil)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
@@ -55,6 +55,8 @@ st.markdown("""
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 8px; height: 38px; }
     div[data-testid="metric-container"] { background-color: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 10px; }
+    /* Ajuste para que los bloques de código (copiar) se vean limpios */
+    pre { margin-bottom: 0rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -84,7 +86,7 @@ def load_templates():
 def save_templates(templates_dict):
     with open(WA_TEMPLATES_FILE, "w", encoding="utf-8") as f: json.dump(templates_dict, f, ensure_ascii=False, indent=4)
 
-def generar_password_aleatoria(longitud=8): # Más robusta para Google
+def generar_password_aleatoria(longitud=8):
     caracteres = string.ascii_letters + string.digits
     return ''.join(random.choice(caracteres) for i in range(longitud))
 
@@ -96,15 +98,22 @@ def generar_usuario(nombre):
 NOMBRES = ["Juan", "Carlos", "Jose", "Luis", "David", "Javier", "Daniel", "Maria", "Ana", "Rosa", "Carmen", "Sofia", "Lucia"]
 APELLIDOS = ["Garcia", "Martinez", "Lopez", "Gonzalez", "Perez", "Rodriguez", "Sanchez", "Ramirez", "Cruz", "Flores", "Gomez"]
 
+# --- LÓGICA DE GENERACIÓN SEPARADA PARA COPIADO FÁCIL ---
 def generar_lote_correos(cantidad=10):
     lote = []
     for _ in range(cantidad):
         n = random.choice(NOMBRES)
         a = random.choice(APELLIDOS)
         num = random.randint(1000, 9999)
-        correo = f"{n.lower()}.{a.lower()}.prem{num}@gmail.com"
+        usuario_sin_arroba = f"{n.lower()}.{a.lower()}.prem{num}"
         pwd = generar_password_aleatoria()
-        lote.append({"Nombre": f"{n} {a}", "Correo": correo, "Pass": pwd})
+        lote.append({
+            "Nombre": n, 
+            "Apellido": a, 
+            "Usuario": usuario_sin_arroba, 
+            "Correo": f"{usuario_sin_arroba}@gmail.com", 
+            "Pass": pwd
+        })
     return lote
 
 def cargar_datos():
@@ -149,7 +158,7 @@ if 'logged_in' not in st.session_state:
     st.session_state.role = ""
     st.session_state.acceso_yt = "No"
     st.session_state.alertas_vistas = False 
-    st.session_state.temp_emails = [] # Memoria del generador de correos
+    st.session_state.temp_emails = [] 
 
 if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
 if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = None
@@ -395,7 +404,7 @@ if menu == "📊 Panel de Ventas":
     with h1: 
         if st.button("➕ NUEVA VENTA", type="primary", use_container_width=True): nueva_venta_popup()
     with h2: 
-        if st.button("🔔 Ver Alertas Urgentes", use_container_width=True):
+        if st.button("🔔 Ver Alertas", use_container_width=True):
             st.session_state.alertas_vistas = False
             st.rerun()
             
@@ -514,38 +523,48 @@ elif menu == "📂 Ex-Clientes":
 elif menu == "📦 Inventario YT":
     st.header("Inventario YouTube")
     
-    # --- ASISTENTE DE CREACIÓN MASIVA ---
-    with st.expander("⚡ Asistente de Creación Masiva (Generador de Datos)", expanded=True):
-        st.info("Genera perfiles ficticios para copiarlos y crear cuentas en Google. Borra las que no te dejen crear y guarda el resto.")
+    # --- ASISTENTE DE CREACIÓN MASIVA CON UI MÓVIL ---
+    with st.expander("⚡ Asistente de Creación Masiva", expanded=True):
+        st.info("💡 Toca el ícono de copiar al lado de cada bloque para pegarlo directamente en Google.")
         
-        if st.button("🔄 Generar 10 Perfiles Nuevos", use_container_width=True):
+        if st.button("🔄 Generar 10 Perfiles", use_container_width=True):
             st.session_state.temp_emails = generar_lote_correos(10)
             st.rerun()
             
         if st.session_state.temp_emails:
             st.write("---")
-            st.write("📋 **Cuentas en Sala de Espera:**")
-            
-            # Mostrar cuentas temporales con botón de borrar individual
             for i, acc in enumerate(st.session_state.temp_emails):
                 with st.container(border=True):
-                    st.write(f"👤 **{acc['Nombre']}**")
-                    st.code(f"Correo: {acc['Correo']}\nClave: {acc['Pass']}")
-                    if st.button("🗑️ Eliminar porque Google bloqueó la IP", key=f"del_tmp_{i}", use_container_width=True):
+                    st.write(f"👤 **{acc['Nombre']} {acc['Apellido']}**")
+                    
+                    # Interfaz en 2 columnas para copiado rápido en móvil
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.caption("Nombre:")
+                        st.code(acc['Nombre'], language=None)
+                        st.caption("Usuario (Sin @):")
+                        st.code(acc['Usuario'], language=None)
+                    with c2:
+                        st.caption("Apellido:")
+                        st.code(acc['Apellido'], language=None)
+                        st.caption("Contraseña:")
+                        st.code(acc['Pass'], language=None)
+                    
+                    if st.button("🗑️ Borrar (Google bloqueó)", key=f"del_tmp_{i}", use_container_width=True):
                         st.session_state.temp_emails.pop(i)
                         st.rerun()
             
             st.write("---")
-            if st.button("✅ Confirmar y Guardar estas cuentas en Inventario", type="primary", use_container_width=True):
+            if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 df_inv.to_csv(INV_FILE, index=False)
-                st.session_state.temp_emails = [] # Limpiar memoria
+                st.session_state.temp_emails = []
                 st.success("¡Cuentas añadidas exitosamente al inventario!")
                 st.rerun()
                 
     st.write("---")
-
+    
     # --- INVENTARIO NORMAL ---
     if st.button("➕ NUEVO CORREO MANUAL", type="primary", use_container_width=True):
         @st.dialog("Registrar Correo")
