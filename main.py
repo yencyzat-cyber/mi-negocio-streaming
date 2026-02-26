@@ -12,7 +12,7 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.16 (Pop-ups de Alerta Automáticos)"
+VERSION_APP = "1.17 (Filtro Multi-Vendedor Avanzado)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
@@ -30,7 +30,6 @@ st.markdown("""
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
         width: 25% !important; min-width: 0 !important; flex: 1 1 0px !important;
     }
-    /* Estilo botones pop-up de alerta (2 columnas) */
     .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important;
     }
@@ -131,7 +130,6 @@ if 'logged_in' not in st.session_state:
     st.session_state.user = ""
     st.session_state.role = ""
     st.session_state.acceso_yt = "No"
-    # Bandera para que el popup solo salga 1 vez al entrar
     st.session_state.alertas_vistas = False 
 
 if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
@@ -158,7 +156,7 @@ if not st.session_state.logged_in:
                 st.session_state.user = match.iloc[0]['Usuario']
                 st.session_state.role = match.iloc[0]['Rol']
                 st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
-                st.session_state.alertas_vistas = False # Reinicia al loguear
+                st.session_state.alertas_vistas = False
                 st.rerun()
             else:
                 st.error("❌ Credenciales incorrectas.")
@@ -167,8 +165,6 @@ if not st.session_state.logged_in:
 # ==============================================================================
 # BLOQUE 5: DIÁLOGOS DE GESTIÓN Y POP-UP URGENTE
 # ==============================================================================
-
-# --- NUEVO: DIÁLOGO DE ALERTAS AUTOMÁTICAS ---
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
     st.warning("⚠️ **ATENCIÓN:** Los siguientes clientes requieren gestión inmediata.")
@@ -176,8 +172,6 @@ def mostrar_popup_alertas(df_urgente, hoy):
     
     for idx, row in df_urgente.sort_values(by="Vencimiento").iterrows():
         dias = (row['Vencimiento'] - hoy).days
-        
-        # Lógica exacta de días requerida
         if dias == 3: estado_txt = "🟠 Vence en 3 días"
         elif dias == 2: estado_txt = "🟠 Vence en 2 días"
         elif dias == 1: estado_txt = "🟠 Vence en 1 día"
@@ -200,17 +194,14 @@ def mostrar_popup_alertas(df_urgente, hoy):
             
             st.markdown('<div class="fila-alerta"></div>', unsafe_allow_html=True)
             ca1, ca2 = st.columns(2)
-            with ca1:
-                st.link_button("📲 Enviar Mensaje", wa_url, use_container_width=True)
+            with ca1: st.link_button("📲 Enviar Mensaje", wa_url, use_container_width=True)
             with ca2:
                 if st.button("🗑️ Enviar a Papelera", key=f"alerta_del_{idx}", use_container_width=True):
-                    # Lógica para mandar a ex-clientes
                     global df_ex_clientes, df_ventas
                     df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
                     df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
                     df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False)
                     st.rerun()
-
     st.write("---")
     if st.button("Entendido, cerrar por ahora", type="primary", use_container_width=True):
         st.session_state.alertas_vistas = True
@@ -220,7 +211,7 @@ def mostrar_popup_alertas(df_urgente, hoy):
 def renovar_venta_popup(idx, row):
     st.write(f"Renovando cuenta de: **{row['Cliente']}** (📺 {row['Producto']})")
     if row['Producto'] == "YouTube Premium":
-        st.error(f"⚠️ **IMPORTANTE:** No te olvides de sacar el correo actual (**{row['Correo']}**) del grupo familiar existente ANTES de realizar esta renovación. Si no lo haces, el correo quedará bloqueado y no podrás usarlo para otro cliente.")
+        st.error(f"⚠️ **IMPORTANTE:** No te olvides de sacar el correo actual (**{row['Correo']}**) del grupo familiar existente ANTES de realizar esta renovación.")
         
     dur = st.radio("Plazo de renovación:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
     hoy = datetime.now().date()
@@ -304,7 +295,6 @@ def nueva_venta_popup():
     st.divider()
     ca, cb = st.columns(2)
     tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
-    
     if prod == "YouTube Premium":
         if tiene_acceso_inventario:
             if not df_inv.empty:
@@ -362,27 +352,41 @@ if menu == "📊 Panel de Ventas":
     st.header("Gestión de Suscripciones")
     
     if st.session_state.role == "Admin":
-        filtro_admin = st.selectbox("Vista de datos:", ["Todos los vendedores", f"Solo mis ventas ({st.session_state.user})"])
-        df_mostrar = df_ventas if filtro_admin == "Todos los vendedores" else df_ventas[df_ventas['Vendedor'] == st.session_state.user]
+        cupos_disponibles = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
+        if cupos_disponibles <= 2:
+            st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos de YouTube Premium automáticos.")
+
+    # --- FILTRO MULTI-VENDEDOR (SOLO ADMIN) ---
+    if st.session_state.role == "Admin":
+        nombres_vendedores = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
+        filtro_vendedores = st.multiselect(
+            "👥 Filtrar ventas por:", 
+            options=["Equipo de Ventas (Sin Admin)", "Toda la Empresa (Incluir Admin)"] + nombres_vendedores, 
+            default=["Equipo de Ventas (Sin Admin)"]
+        )
+        
+        if "Toda la Empresa (Incluir Admin)" in filtro_vendedores:
+            df_mostrar = df_ventas
+        elif "Equipo de Ventas (Sin Admin)" in filtro_vendedores:
+            df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
+        elif not filtro_vendedores:
+            df_mostrar = df_ventas
+        else:
+            df_mostrar = df_ventas[df_ventas['Vendedor'].isin(filtro_vendedores)]
     else:
         df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
     hoy = datetime.now().date()
 
-    # --- LÓGICA DE POP-UP ALERTA URGENTE ---
     if not df_mostrar.empty:
         df_urgente = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)]
-        
-        # Si no la ha visto y hay clientes urgentes, se abre automáticamente
         if not st.session_state.alertas_vistas and not df_urgente.empty:
             mostrar_popup_alertas(df_urgente, hoy)
         
-    # --- BOTONERA SUPERIOR ---
     h1, h2 = st.columns(2)
     with h1: 
         if st.button("➕ NUEVA VENTA", type="primary", use_container_width=True): nueva_venta_popup()
     with h2: 
-        # Botón para volver a ver las alertas si el usuario las cerró
         if st.button("🔔 Ver Alertas Urgentes", use_container_width=True):
             st.session_state.alertas_vistas = False
             st.rerun()
@@ -418,7 +422,7 @@ if menu == "📊 Panel de Ventas":
             wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
             
             with st.container(border=True):
-                vendedor_badge = f" 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" and 'filtro_admin' in locals() and filtro_admin == "Todos los vendedores" else ""
+                vendedor_badge = f" 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" else ""
                 
                 st.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
                 st.caption(f"📧 {row['Correo']} | 📅 {row['Vencimiento']}{vendedor_badge}")
@@ -439,28 +443,47 @@ if menu == "📊 Panel de Ventas":
 elif menu == "📈 Dashboard":
     st.header("Análisis de Rendimiento")
     
-    if st.session_state.role == "Admin": df_dash = df_ventas.copy()
-    else: df_dash = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
+    # --- FILTRO MULTI-VENDEDOR EN DASHBOARD ---
+    if st.session_state.role == "Admin": 
+        nombres_vendedores = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
+        filtro_vendedores_dash = st.multiselect(
+            "👥 Filtrar rendimiento por:", 
+            options=["Equipo de Ventas (Sin Admin)", "Toda la Empresa (Incluir Admin)"] + nombres_vendedores, 
+            default=["Equipo de Ventas (Sin Admin)"]
+        )
         
-    if df_dash.empty: 
-        st.warning("No hay suficientes datos.")
+        if "Toda la Empresa (Incluir Admin)" in filtro_vendedores_dash:
+            df_dash_base = df_ventas.copy()
+        elif "Equipo de Ventas (Sin Admin)" in filtro_vendedores_dash:
+            df_dash_base = df_ventas[df_ventas['Vendedor'] != st.session_state.user].copy()
+        elif not filtro_vendedores_dash:
+            df_dash_base = df_ventas.copy()
+        else:
+            df_dash_base = df_ventas[df_ventas['Vendedor'].isin(filtro_vendedores_dash)].copy()
+    else: 
+        df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
+        
+    if df_dash_base.empty: 
+        st.warning("No hay suficientes datos registrados.")
     else:
-        df_dash['Vencimiento_dt'] = pd.to_datetime(df_dash['Vencimiento'], errors='coerce')
-        df_dash['Periodo'] = df_dash['Vencimiento_dt'].dt.strftime('%Y-%m')
-        periodos_disponibles = sorted(df_dash['Periodo'].dropna().unique().tolist(), reverse=True)
+        df_dash_base['Vencimiento_dt'] = pd.to_datetime(df_dash_base['Vencimiento'], errors='coerce')
+        df_dash_base['Periodo'] = df_dash_base['Vencimiento_dt'].dt.strftime('%Y-%m')
+        periodos_disponibles = sorted(df_dash_base['Periodo'].dropna().unique().tolist(), reverse=True)
         
         opciones_periodos = ["Histórico Global"] + periodos_disponibles
         formato_opciones = lambda x: "Histórico Global (Todo)" if x == "Histórico Global" else formatear_mes_anio(x)
         
-        periodo_sel = st.selectbox("📅 Selecciona el periodo:", opciones_periodos, format_func=formato_opciones)
+        periodo_sel = st.selectbox("📅 Selecciona el periodo mensual:", opciones_periodos, format_func=formato_opciones)
         
         if periodo_sel != "Histórico Global":
-            df_dash = df_dash[df_dash['Periodo'] == periodo_sel]
+            df_dash = df_dash_base[df_dash_base['Periodo'] == periodo_sel]
+        else:
+            df_dash = df_dash_base
             
         st.write("---")
         
         if df_dash.empty:
-            st.info("No hay ventas registradas para este periodo exacto.")
+            st.info("No hay ventas registradas en este periodo y/o por los vendedores seleccionados.")
         else:
             df_dash['Costo'] = pd.to_numeric(df_dash['Costo'], errors='coerce').fillna(0)
             df_dash['Precio'] = pd.to_numeric(df_dash['Precio'], errors='coerce').fillna(0)
@@ -470,10 +493,10 @@ elif menu == "📈 Dashboard":
             total_clientes = len(df_dash)
             
             c1, c2 = st.columns(2)
-            c1.metric("👥 Clientes del periodo", f"{total_clientes}")
+            c1.metric("👥 Clientes", f"{total_clientes}")
             c2.metric("💰 Ventas Brutas", f"${total_ingresos:.2f}")
             c3, c4 = st.columns(2)
-            c3.metric("📉 Costos", f"${total_costos:.2f}")
+            c3.metric("📉 Costos Totales", f"${total_costos:.2f}")
             c4.metric("🚀 GANANCIA NETA", f"${total_ganancia:.2f}")
             
             st.divider()
