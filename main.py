@@ -5,12 +5,14 @@ import os
 import re
 import random
 import string
+import altair as alt
 
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.7.1 (Corrección Dashboard)"
+VERSION_APP = "1.8 (Dashboard Interactivo)"
 
+# ENLACE REAL DE TU APLICACIÓN
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
 st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_sidebar_state="expanded")
@@ -21,6 +23,7 @@ st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_side
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
+    /* Botones en 4 columnas (25% cada uno) para móvil */
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important;
     }
@@ -309,7 +312,7 @@ if menu == "📊 Panel de Ventas":
                             df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
     else: st.info("No hay registros activos.")
 
-# --- VISTA 2: DASHBOARD FINANCIERO (CORREGIDO PARA MÓVIL) ---
+# --- VISTA 2: DASHBOARD FINANCIERO CON GRÁFICO ---
 elif menu == "📈 Dashboard (Rendimiento)":
     st.header("Análisis de Rendimiento")
     
@@ -331,7 +334,6 @@ elif menu == "📈 Dashboard (Rendimiento)":
         total_ganancia = total_ingresos - total_costos
         total_clientes = len(df_dash)
         
-        # LA CORRECCIÓN CLAVE PARA QUE NO COLAPSE EN CELULAR
         if vista == "💻 PC":
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("👥 Clientes Activos", f"{total_clientes}")
@@ -339,7 +341,6 @@ elif menu == "📈 Dashboard (Rendimiento)":
             c3.metric("📉 Costos Totales", f"${total_costos:.2f}")
             c4.metric("🚀 GANANCIA NETA", f"${total_ganancia:.2f}")
         else:
-            # En móvil se muestran en dos filas de 2x2 para encajar perfectamente
             c1, c2 = st.columns(2)
             c1.metric("👥 Clientes", f"{total_clientes}")
             c2.metric("💰 Ventas", f"${total_ingresos:.2f}")
@@ -348,9 +349,21 @@ elif menu == "📈 Dashboard (Rendimiento)":
             c4.metric("🚀 GANANCIA", f"${total_ganancia:.2f}")
         
         st.divider()
-        st.subheader("Ventas por Plataforma")
-        ventas_plat = df_dash['Producto'].value_counts()
-        st.bar_chart(ventas_plat)
+        st.subheader("Distribución por Plataforma")
+        
+        # Generación del gráfico de anillo con Altair
+        ventas_plat = df_dash['Producto'].value_counts().reset_index()
+        ventas_plat.columns = ['Plataforma', 'Cantidad']
+        
+        grafico_anillo = alt.Chart(ventas_plat).mark_arc(innerRadius=60).encode(
+            theta=alt.Theta(field="Cantidad", type="quantitative"),
+            color=alt.Color(field="Plataforma", type="nominal", legend=alt.Legend(title="Plataformas", orient="bottom")),
+            tooltip=['Plataforma', 'Cantidad']
+        ).properties(
+            height=350
+        ).configure_view(strokeWidth=0)
+        
+        st.altair_chart(grafico_anillo, use_container_width=True)
 
 # --- VISTA 3: EX-CLIENTES (PAPELERA) ---
 elif menu == "📂 Ex-Clientes":
@@ -403,6 +416,21 @@ elif menu == "📦 Inventario YT":
 # --- VISTA 5: GESTIÓN DE VENDEDORES (SOLO ADMIN) ---
 elif menu == "👥 Gestión de Vendedores":
     st.header("Control de Personal")
+    
+    @st.dialog("Editar Vendedor")
+    def editar_vendedor_popup(idx, row):
+        st.write(f"Editando a: **{row['Usuario']}**")
+        n_tel = st.text_input("Teléfono", value=row['Telefono'])
+        n_pwd = st.text_input("Nueva Contraseña (Dejar igual si no quieres cambiar)", value=row['Password'])
+        n_acc = st.checkbox("✅ Dar acceso al auto-rellenado de YouTube Premium", value=(row['Acceso_YT'] == 'Si'))
+        if st.button("Actualizar Perfil", type="primary", use_container_width=True):
+            df_usuarios.at[idx, 'Telefono'] = n_tel
+            df_usuarios.at[idx, 'Password'] = n_pwd
+            df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
+            df_usuarios.to_csv(USUARIOS_FILE, index=False)
+            st.success("Actualizado")
+            st.rerun()
+            
     if st.session_state.nuevo_vend_usr:
         usr_gen = st.session_state.nuevo_vend_usr
         pwd_gen = st.session_state.nuevo_vend_pwd
@@ -451,9 +479,13 @@ elif menu == "👥 Gestión de Vendedores":
         for idx, row in vendedores.iterrows():
             with st.container(border=True):
                 st.write(f"👤 **{row['Usuario']}** | 📱 {row['Telefono']}")
+                st.caption(f"🔑 Clave: {row['Password']} | 📺 Auto-asignar YT: **{row['Acceso_YT']}**")
+                if vista == "📱 Móvil": st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
                 c_edit, c_del = st.columns(2) if vista == "📱 Móvil" else st.columns([1, 10])
                 with c_edit:
-                    if st.button("🗑️ Borrar", key=f"du_{idx}"):
+                    if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
+                with c_del:
+                    if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
                         df_usuarios.drop(idx).to_csv(USUARIOS_FILE, index=False); st.rerun()
 
 # --- VISTA 6: CONFIGURACIÓN GENERAL (SOLO ADMIN) ---
