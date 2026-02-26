@@ -12,11 +12,31 @@ from urllib.parse import quote
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.17 (Filtro Multi-Vendedor Avanzado)"
+VERSION_APP = "1.18"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 
 st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_sidebar_state="expanded")
+
+# --- INYECCIÓN DEL NÚMERO DE VERSIÓN EN LA ESQUINA SUPERIOR DERECHA ---
+st.markdown(f"""
+    <style>
+    .version-corner {{
+        position: fixed;
+        top: 15px;
+        right: 70px; /* Separado del menú de Streamlit */
+        background-color: rgba(40, 40, 40, 0.8);
+        color: #aaaaaa;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 999999;
+        pointer-events: none;
+    }}
+    </style>
+    <div class="version-corner">v{VERSION_APP}</div>
+""", unsafe_allow_html=True)
 
 # ==============================================================================
 # BLOQUE 2: CSS MÓVIL Y ESTILOS
@@ -169,7 +189,6 @@ if not st.session_state.logged_in:
 def mostrar_popup_alertas(df_urgente, hoy):
     st.warning("⚠️ **ATENCIÓN:** Los siguientes clientes requieren gestión inmediata.")
     st.write("---")
-    
     for idx, row in df_urgente.sort_values(by="Vencimiento").iterrows():
         dias = (row['Vencimiento'] - hoy).days
         if dias == 3: estado_txt = "🟠 Vence en 3 días"
@@ -191,7 +210,6 @@ def mostrar_popup_alertas(df_urgente, hoy):
             st.write(f"**{row['Cliente']}** | 📺 {row['Producto']}")
             st.caption(f"**Estado:** {estado_txt}")
             st.caption(f"📧 {row['Correo']} | 🔑 {row['Pass']}")
-            
             st.markdown('<div class="fila-alerta"></div>', unsafe_allow_html=True)
             ca1, ca2 = st.columns(2)
             with ca1: st.link_button("📲 Enviar Mensaje", wa_url, use_container_width=True)
@@ -295,6 +313,7 @@ def nueva_venta_popup():
     st.divider()
     ca, cb = st.columns(2)
     tiene_acceso_inventario = (st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")
+    
     if prod == "YouTube Premium":
         if tiene_acceso_inventario:
             if not df_inv.empty:
@@ -356,23 +375,21 @@ if menu == "📊 Panel de Ventas":
         if cupos_disponibles <= 2:
             st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos de YouTube Premium automáticos.")
 
-    # --- FILTRO MULTI-VENDEDOR (SOLO ADMIN) ---
+    # --- NUEVO FILTRO DE VENDEDORES TIPO EXCEL ---
     if st.session_state.role == "Admin":
-        nombres_vendedores = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
-        filtro_vendedores = st.multiselect(
-            "👥 Filtrar ventas por:", 
-            options=["Equipo de Ventas (Sin Admin)", "Toda la Empresa (Incluir Admin)"] + nombres_vendedores, 
-            default=["Equipo de Ventas (Sin Admin)"]
-        )
-        
-        if "Toda la Empresa (Incluir Admin)" in filtro_vendedores:
+        tipo_filtro = st.selectbox("👥 Filtro de Vendedores:", 
+            ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."])
+            
+        if tipo_filtro == "🌎 Mostrar Todos":
             df_mostrar = df_ventas
-        elif "Equipo de Ventas (Sin Admin)" in filtro_vendedores:
+        elif tipo_filtro == "👥 Todos sin Admin":
             df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
-        elif not filtro_vendedores:
-            df_mostrar = df_ventas
+        elif tipo_filtro == "👑 Solo Admin":
+            df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
         else:
-            df_mostrar = df_ventas[df_ventas['Vendedor'].isin(filtro_vendedores)]
+            lista_v = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
+            vend_sel = st.multiselect("Marca los vendedores a consultar:", lista_v, default=lista_v)
+            df_mostrar = df_ventas[df_ventas['Vendedor'].isin(vend_sel)]
     else:
         df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
@@ -443,23 +460,20 @@ if menu == "📊 Panel de Ventas":
 elif menu == "📈 Dashboard":
     st.header("Análisis de Rendimiento")
     
-    # --- FILTRO MULTI-VENDEDOR EN DASHBOARD ---
     if st.session_state.role == "Admin": 
-        nombres_vendedores = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
-        filtro_vendedores_dash = st.multiselect(
-            "👥 Filtrar rendimiento por:", 
-            options=["Equipo de Ventas (Sin Admin)", "Toda la Empresa (Incluir Admin)"] + nombres_vendedores, 
-            default=["Equipo de Ventas (Sin Admin)"]
-        )
-        
-        if "Toda la Empresa (Incluir Admin)" in filtro_vendedores_dash:
+        tipo_filtro_dash = st.selectbox("👥 Filtro de Vendedores:", 
+            ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."], key="filt_dash")
+            
+        if tipo_filtro_dash == "🌎 Mostrar Todos":
             df_dash_base = df_ventas.copy()
-        elif "Equipo de Ventas (Sin Admin)" in filtro_vendedores_dash:
+        elif tipo_filtro_dash == "👥 Todos sin Admin":
             df_dash_base = df_ventas[df_ventas['Vendedor'] != st.session_state.user].copy()
-        elif not filtro_vendedores_dash:
-            df_dash_base = df_ventas.copy()
+        elif tipo_filtro_dash == "👑 Solo Admin":
+            df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
         else:
-            df_dash_base = df_ventas[df_ventas['Vendedor'].isin(filtro_vendedores_dash)].copy()
+            lista_v = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
+            vend_sel_dash = st.multiselect("Marca los vendedores:", lista_v, default=lista_v, key="mult_dash")
+            df_dash_base = df_ventas[df_ventas['Vendedor'].isin(vend_sel_dash)].copy()
     else: 
         df_dash_base = df_ventas[df_ventas['Vendedor'] == st.session_state.user].copy()
         
