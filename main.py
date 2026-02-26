@@ -147,7 +147,7 @@ with t1:
                     
                     # Fila de botones milimétricamente alineada
                     cw, ce, cd = st.columns([2, 1, 1])
-                    cw.link_button("📲 WA", wa_enlace, use_container_width=True)
+                    cw.link_button("📲", wa_enlace, use_container_width=True)
                     if ce.button("📝", key=f"e_{idx}", use_container_width=True): editar_venta_popup(idx, row)
                     if cd.button("🗑️", key=f"v_{idx}", use_container_width=True):
                         df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
