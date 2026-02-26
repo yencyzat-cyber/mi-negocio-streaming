@@ -8,30 +8,20 @@ from dateutil.relativedelta import relativedelta
 # --- CONFIGURACIÓN Y ESTILO ---
 st.set_page_config(page_title="NEXA-Stream Pro", layout="wide")
 
-# Arreglo visual para alinear perfectamente los botones
+# CSS simplificado: Ahora usamos botones nativos para todo, garantizando alineación perfecta
 st.markdown("""
     <style>
-    .stButton>button { 
-        border-radius: 12px; 
-        height: 32px; 
+    .stButton>button, .stLinkButton>a { 
+        border-radius: 8px; 
+        height: 35px; 
         width: 100%; 
-        font-size: 12px; 
-        padding: 0; 
-    }
-    .wa-button { 
-        background-color: #25D366; 
-        color: white; 
-        border-radius: 12px; 
-        text-decoration: none; 
-        font-weight: bold;
+        font-size: 13px; 
         display: flex; 
         align-items: center; 
         justify-content: center;
-        width: 100%; 
-        height: 32px; 
-        font-size: 12px;
+        padding: 0;
     }
-    .stTextInput>div>div>input { border-radius: 8px; height: 32px; }
+    .stTextInput>div>div>input { border-radius: 8px; height: 35px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -125,6 +115,11 @@ def nueva_venta_popup():
 
 # --- INTERFAZ PRINCIPAL ---
 st.title("🚀 NEXA-Stream Manager")
+
+# SELECTOR DE VISTA (Móvil vs PC)
+vista_actual = st.radio("🖥️ / 📱 Selecciona tu modo de vista:", ["📱 Vista Celular (Compacta)", "💻 Vista PC (Expandida)"], horizontal=True)
+st.divider()
+
 t1, t2 = st.tabs(["📊 Administración de Ventas", "⚙️ Configuración e Inventario"])
 
 with t1:
@@ -139,33 +134,50 @@ with t1:
         for idx, row in df_ventas[mask].sort_values(by="Vencimiento").iterrows():
             d = (row['Vencimiento'] - hoy).days
             col = "🔴" if d <= 0 else "🟠" if d <= 3 else "🟢"
+            
+            msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%20¿Renovamos?"
+            wa_enlace = f"https://wa.me/{row['WhatsApp']}?text={msj}"
+            
             with st.container(border=True):
-                ci, cw, ce, cd = st.columns([3.5, 0.9, 0.4, 0.4])
-                ci.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
-                ci.caption(f"📧 {row['Correo']} | 👤 {row['Perfil']} | 📅 Vence: {row['Vencimiento']}")
-                msj = f"Hola%20{row['Cliente']},%20tu%20cuenta%20de%20{row['Producto']}%20vence%20el%20{row['Vencimiento']}.%20¿Renovamos?"
-                cw.markdown(f'<a href="https://wa.me/{row["WhatsApp"]}?text={msj}" class="wa-button">📲 WA</a>', unsafe_allow_html=True)
-                if ce.button("📝", key=f"e_{idx}"): editar_venta_popup(idx, row)
-                if cd.button("🗑️", key=f"v_{idx}"):
-                    df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
+                if vista_actual == "📱 Vista Celular (Compacta)":
+                    # VISTA MÓVIL: Tarjeta apilada, botones abajo alineados
+                    ci = st.container()
+                    ci.write(f"{col} **{row['Cliente']}** | {row['Producto']}")
+                    ci.caption(f"📧 {row['Correo']} | 📅 Vence: {row['Vencimiento']}")
+                    
+                    # Fila de botones milimétricamente alineada
+                    cw, ce, cd = st.columns([2, 1, 1])
+                    cw.link_button("📲 WA", wa_enlace, use_container_width=True)
+                    if ce.button("📝", key=f"e_{idx}", use_container_width=True): editar_venta_popup(idx, row)
+                    if cd.button("🗑️", key=f"v_{idx}", use_container_width=True):
+                        df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
+                
+                else:
+                    # VISTA PC: Todo en una sola línea ancha
+                    col1, col2, col3, cw, ce, cd = st.columns([2, 2, 2, 1, 0.5, 0.5])
+                    col1.write(f"{col} **{row['Cliente']}**")
+                    col2.write(f"📺 {row['Producto']}")
+                    col3.write(f"📅 Vence: {row['Vencimiento']}")
+                    cw.link_button("📲 WhatsApp", wa_enlace, use_container_width=True)
+                    if ce.button("📝 Editar", key=f"e_pc_{idx}", use_container_width=True): editar_venta_popup(idx, row)
+                    if cd.button("🗑️ Borrar", key=f"v_pc_{idx}", use_container_width=True):
+                        df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
     else: st.info("No hay ventas registradas.")
 
 with t2:
-    st.info("💡 **Consejo:** Descarga tu Backup una vez por semana para asegurar tu información.")
     b1, b2 = st.columns(2)
-    # Botones de descarga (Backup)
     csv_ventas = df_ventas.to_csv(index=False).encode('utf-8')
     csv_inv = df_inv.to_csv(index=False).encode('utf-8')
-    b1.download_button("📥 Descargar Backup de Ventas", data=csv_ventas, file_name="backup_ventas.csv", mime="text/csv", use_container_width=True)
-    b2.download_button("📥 Descargar Backup de Inventario", data=csv_inv, file_name="backup_inventario.csv", mime="text/csv", use_container_width=True)
+    b1.download_button("📥 Descargar Backup Ventas", data=csv_ventas, file_name="backup_ventas.csv", mime="text/csv", use_container_width=True)
+    b2.download_button("📥 Descargar Backup Inventario", data=csv_inv, file_name="backup_inventario.csv", mime="text/csv", use_container_width=True)
     
     st.divider()
-    col_inv, col_plat = st.columns([2, 1])
+    col_inv, col_plat = st.columns([2, 1]) if vista_actual == "💻 Vista PC (Expandida)" else st.columns([1, 1])
     
     with col_plat:
         st.subheader("🛠 Plataformas")
         nueva_p = st.text_input("Agregar Plataforma")
-        if st.button("Añadir"):
+        if st.button("Añadir", use_container_width=True):
             if nueva_p and nueva_p not in lista_plataformas:
                 lista_plataformas.append(nueva_p)
                 pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
@@ -174,14 +186,14 @@ with t2:
         for p in lista_plataformas:
             cp1, cp2 = st.columns([3, 1])
             cp1.write(p)
-            if cp2.button("🗑️", key=f"del_p_{p}"):
+            if cp2.button("🗑️", key=f"del_p_{p}", use_container_width=True):
                 lista_plataformas.remove(p)
                 pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
                 st.rerun()
 
     with col_inv:
         st.subheader("📦 Inventario YouTube")
-        if st.button("➕ AGREGAR CORREO YT"):
+        if st.button("➕ AGREGAR CORREO YT", use_container_width=True):
             @st.dialog("Nuevo Gmail")
             def add_yt():
                 m, p = st.text_input("Gmail"), st.text_input("Clave")
@@ -193,10 +205,10 @@ with t2:
             
         for idx, row in df_inv.iterrows():
             with st.container(border=True):
-                c1, c2, c3 = st.columns([4, 0.5, 0.5])
+                c1, c2, c3 = st.columns([4, 1, 1]) if vista_actual == "📱 Vista Celular (Compacta)" else st.columns([4, 0.5, 0.5])
                 c1.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
                 c1.caption(f"👤 Asignado a: {row['Asignado_A']}")
-                if c2.button("📝", key=f"ed_i_{idx}"):
+                if c2.button("📝", key=f"ed_i_{idx}", use_container_width=True):
                     @st.dialog("Editar")
                     def edit_inv():
                         nu = st.selectbox("Usos", [0,1,2], index=int(row['Usos']))
@@ -205,5 +217,5 @@ with t2:
                             df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
                             df_inv.to_csv(INV_FILE, index=False); st.rerun()
                     edit_inv()
-                if c3.button("🗑️", key=f"del_i_{idx}"):
+                if c3.button("🗑️", key=f"del_i_{idx}", use_container_width=True):
                     df_inv.drop(idx).to_csv(INV_FILE, index=False); st.rerun()
