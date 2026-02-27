@@ -8,14 +8,16 @@ import string
 import json
 import altair as alt
 from urllib.parse import quote
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "1.21"
+VERSION_APP = "2.0 (Google Sheets DB)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
-NUMERO_ADMIN = "51902028672" # Tu número para recibir las solicitudes de pago
+NUMERO_ADMIN = "51902028672" 
 
 st.set_page_config(page_title="NEXA-Stream Manager", layout="wide", initial_sidebar_state="expanded")
 
@@ -36,23 +38,11 @@ st.markdown(f"""
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important;
-    }
-    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-        width: 25% !important; min-width: 0 !important; flex: 1 1 0px !important;
-    }
-    .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important;
-    }
-    .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-        width: 50% !important; min-width: 0 !important; flex: 1 1 0px !important;
-    }
-    .stButton>button, .stLinkButton>a {
-        border-radius: 8px !important; height: 38px !important; padding: 0px !important;
-        display: flex !important; align-items: center !important; justify-content: center !important;
-        width: 100% !important; font-size: 16px !important; margin: 0px !important;
-    }
+    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important; }
+    .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] { width: 25% !important; min-width: 0 !important; flex: 1 1 0px !important; }
+    .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: nowrap !important; gap: 5px !important; }
+    .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] { width: 50% !important; min-width: 0 !important; flex: 1 1 0px !important; }
+    .stButton>button, .stLinkButton>a { border-radius: 8px !important; height: 38px !important; padding: 0px !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 100% !important; font-size: 16px !important; margin: 0px !important; }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; font-weight: bold !important; }
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 8px; height: 38px; }
     div[data-testid="metric-container"] { background-color: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 10px; }
@@ -61,38 +51,92 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: FUNCIONES DE DATOS Y PLANTILLAS
+# BLOQUE 3: CONEXIÓN GOOGLE SHEETS Y DATOS
 # ==============================================================================
-VENTAS_FILE = "ventas_data.csv"
-INV_FILE = "inventario_yt.csv"
-PLAT_FILE = "plataformas.csv"
-USUARIOS_FILE = "usuarios.csv"
-EX_CLIENTES_FILE = "ex_clientes.csv"
-WA_TEMPLATES_FILE = "wa_templates.json"
+@st.cache_resource
+def init_gsheets():
+    try:
+        creds_dict = json.loads(st.secrets["GOOGLE_JSON"])
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        client = gspread.authorize(creds)
+        return client.open_by_url(st.secrets["URL_EXCEL"])
+    except Exception as e:
+        st.error(f"Error al conectar con Google Sheets. Verifica tus Secrets en Streamlit. Detalles: {e}")
+        st.stop()
 
+sh = init_gsheets()
+
+def load_df(ws_name, cols):
+    try:
+        ws = sh.worksheet(ws_name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=ws_name, rows="1000", cols="20")
+        ws.update(values=[cols], range_name="A1")
+    
+    data = ws.get_all_records()
+    if not data: return pd.DataFrame(columns=cols)
+    return pd.DataFrame(data)
+
+def save_df(df, ws_name):
+    ws = sh.worksheet(ws_name)
+    ws.clear()
+    df_str = df.fillna("").astype(str)
+    ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
+
+# --- CARGAR TABLAS DESDE LA NUBE ---
+cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio"]
+df_ventas = load_df("Ventas", cols_ventas)
+df_ventas['Vencimiento'] = pd.to_datetime(df_ventas['Vencimiento'], errors='coerce').dt.date
+
+df_ex_clientes = load_df("ExClientes", cols_ventas)
+df_inv = load_df("Inventario", ["Correo", "Password", "Usos", "Asignado_A"])
+
+# Plataformas
+df_plat = load_df("Plataformas", ["Nombre"])
+if df_plat.empty:
+    lista_plataformas = ["YouTube Premium", "Netflix", "Disney+", "Google One", "Spotify"]
+    save_df(pd.DataFrame(lista_plataformas, columns=["Nombre"]), "Plataformas")
+else:
+    lista_plataformas = df_plat['Nombre'].tolist()
+
+# Usuarios
+df_usuarios = load_df("Usuarios", ["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
+if df_usuarios.empty:
+    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "N/A", "Si"]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
+    save_df(df_usuarios, "Usuarios")
+
+# WhatsApp Plantillas
 DEFAULT_TEMPLATES = {
     "recordatorio": "Hola {cliente}, te recordamos que tu cuenta de {producto} vencerá el {vencimiento}. ¿Deseas ir renovando para no perder el servicio?",
     "vencido": "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO el {vencimiento}. Por favor comunícate con nosotros para reactivar tu servicio.",
     "vendedor": "Hola {nombre}, bienvenido al equipo. Aquí tienes tu acceso al sistema NEXA-Stream.\n\n👤 Usuario: {usuario}\n🔑 Contraseña: {password}\n🌐 Link de acceso: {link}"
 }
 
-def load_templates():
-    if os.path.exists(WA_TEMPLATES_FILE):
-        try:
-            with open(WA_TEMPLATES_FILE, "r", encoding="utf-8") as f: return json.load(f)
-        except: return DEFAULT_TEMPLATES
-    return DEFAULT_TEMPLATES
+df_conf = load_df("Config", ["Clave", "Valor"])
+if df_conf.empty:
+    df_conf = pd.DataFrame(list(DEFAULT_TEMPLATES.items()), columns=["Clave", "Valor"])
+    save_df(df_conf, "Config")
+    plantillas_wa = DEFAULT_TEMPLATES
+else:
+    plantillas_wa = dict(zip(df_conf['Clave'], df_conf['Valor']))
 
 def save_templates(templates_dict):
-    with open(WA_TEMPLATES_FILE, "w", encoding="utf-8") as f: json.dump(templates_dict, f, ensure_ascii=False, indent=4)
+    df_conf_updated = pd.DataFrame(list(templates_dict.items()), columns=["Clave", "Valor"])
+    save_df(df_conf_updated, "Config")
 
+# Generadores
 def generar_password_aleatoria(longitud=8):
-    caracteres = string.ascii_letters + string.digits
-    return ''.join(random.choice(caracteres) for i in range(longitud))
+    return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(longitud))
 
 def generar_usuario(nombre):
     base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower())
     return f"{base}{random.randint(100, 999)}"
+
+def limpiar_whatsapp(numero):
+    solo_numeros = re.sub(r'\D', '', str(numero))
+    if len(solo_numeros) == 9: return f"51{solo_numeros}"
+    return solo_numeros
 
 NOMBRES = ["Juan", "Carlos", "Jose", "Luis", "David", "Javier", "Daniel", "Maria", "Ana", "Rosa", "Carmen", "Sofia", "Lucia"]
 APELLIDOS = ["Garcia", "Martinez", "Lopez", "Gonzalez", "Perez", "Rodriguez", "Sanchez", "Ramirez", "Cruz", "Flores", "Gomez"]
@@ -100,48 +144,11 @@ APELLIDOS = ["Garcia", "Martinez", "Lopez", "Gonzalez", "Perez", "Rodriguez", "S
 def generar_lote_correos(cantidad=10):
     lote = []
     for _ in range(cantidad):
-        n = random.choice(NOMBRES)
-        a = random.choice(APELLIDOS)
-        num = random.randint(1000, 9999)
-        usuario_sin_arroba = f"{n.lower()}.{a.lower()}.prem{num}"
-        pwd = generar_password_aleatoria()
-        lote.append({
-            "Nombre": n, 
-            "Apellido": a, 
-            "Usuario": usuario_sin_arroba, 
-            "Correo": f"{usuario_sin_arroba}@gmail.com", 
-            "Pass": pwd
-        })
+        n, a = random.choice(NOMBRES), random.choice(APELLIDOS)
+        usr = f"{n.lower()}.{a.lower()}.prem{random.randint(1000, 9999)}"
+        lote.append({"Nombre": n, "Apellido": a, "Usuario": usr, "Correo": f"{usr}@gmail.com", "Pass": generar_password_aleatoria()})
     return lote
 
-def cargar_datos():
-    if os.path.exists(VENTAS_FILE):
-        df = pd.read_csv(VENTAS_FILE)
-        df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce').dt.date
-        cambios = False
-        if 'Vendedor' not in df.columns: df['Vendedor'] = 'admin'; cambios = True
-        if 'Costo' not in df.columns: df['Costo'] = 0.0; cambios = True
-        if 'Precio' not in df.columns: df['Precio'] = 0.0; cambios = True
-        if cambios: df.to_csv(VENTAS_FILE, index=False)
-    else: df = pd.DataFrame(columns=["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio"])
-    if os.path.exists(EX_CLIENTES_FILE): df_ex = pd.read_csv(EX_CLIENTES_FILE)
-    else: df_ex = pd.DataFrame(columns=df.columns)
-    if os.path.exists(INV_FILE): inv = pd.read_csv(INV_FILE)
-    else: inv = pd.DataFrame(columns=["Correo", "Password", "Usos", "Asignado_A"])
-    if os.path.exists(PLAT_FILE): plat = pd.read_csv(PLAT_FILE)['Nombre'].tolist()
-    else:
-        plat = ["YouTube Premium", "Netflix", "Disney+", "Google One", "Spotify"]
-        pd.DataFrame(plat, columns=["Nombre"]).to_csv(PLAT_FILE, index=False)
-    return df, df_ex, inv, plat
-
-df_ventas, df_ex_clientes, df_inv, lista_plataformas = cargar_datos()
-
-def limpiar_whatsapp(numero):
-    solo_numeros = re.sub(r'\D', '', str(numero))
-    if len(solo_numeros) == 9: return f"51{solo_numeros}"
-    return solo_numeros
-
-plantillas_wa = load_templates()
 MESES_NOMBRES = {'01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril', '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto', '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'}
 def formatear_mes_anio(yyyy_mm):
     y, m = yyyy_mm.split('-')
@@ -163,11 +170,6 @@ if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = N
 if 'nuevo_vend_nom' not in st.session_state: st.session_state.nuevo_vend_nom = None
 if 'nuevo_vend_tel' not in st.session_state: st.session_state.nuevo_vend_tel = None
 
-if not os.path.exists(USUARIOS_FILE):
-    pd.DataFrame([["admin", "admin123", "Admin", "N/A", "Si"]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"]).to_csv(USUARIOS_FILE, index=False)
-
-df_usuarios = pd.read_csv(USUARIOS_FILE)
-
 if not st.session_state.logged_in:
     st.title("🔐 Portal NEXA-Stream")
     with st.container(border=True):
@@ -187,7 +189,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN Y POP-UP URGENTE
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
@@ -221,8 +223,9 @@ def mostrar_popup_alertas(df_urgente, hoy):
                 if st.button("🗑️ Enviar a Papelera", key=f"alerta_del_{idx}", use_container_width=True):
                     global df_ex_clientes, df_ventas
                     df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
-                    df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
-                    df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False)
+                    save_df(df_ex_clientes, "ExClientes")
+                    df_ventas = df_ventas.drop(idx)
+                    save_df(df_ventas, "Ventas")
                     st.rerun()
     st.write("---")
     if st.button("Entendido, cerrar por ahora", type="primary", use_container_width=True):
@@ -265,12 +268,10 @@ def renovar_venta_popup(idx, row):
                     with ca: mv = st.text_input("Nuevo Correo Manual")
                     with cb: pv = st.text_input("Nueva Clave Manual")
             else:
-                # --- UPSELL PARA RENOVAR ---
                 st.warning("🚀 **¡Automatiza tus renovaciones!**")
                 st.caption("No pierdas tiempo creando cuentas. Obtén acceso a la bóveda de YouTube por solo **S/ 5.00**.")
                 msj_up = f"Hola Admin, soy {st.session_state.user}. Quiero activar mi acceso a la bóveda de YouTube Premium por S/ 5.00."
                 st.link_button("📲 Solicitar Activación al Admin", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up)}", use_container_width=True)
-                
                 st.info("Por ahora, ingresa los datos de la cuenta que creaste manualmente:")
                 with ca: mv = st.text_input("Nuevo Correo Manual")
                 with cb: pv = st.text_input("Nueva Clave Manual")
@@ -282,7 +283,7 @@ def renovar_venta_popup(idx, row):
         df_ventas.at[idx, 'Vencimiento'] = nueva_fecha
         df_ventas.at[idx, 'Correo'] = mv
         df_ventas.at[idx, 'Pass'] = pv
-        df_ventas.to_csv(VENTAS_FILE, index=False)
+        save_df(df_ventas, "Ventas")
         st.success("¡Renovado con éxito!")
         st.rerun()
 
@@ -307,7 +308,7 @@ def editar_venta_popup(idx, row):
         df_ventas.at[idx, 'Producto'], df_ventas.at[idx, 'Vencimiento'] = prod, venc
         df_ventas.at[idx, 'Correo'], df_ventas.at[idx, 'Pass'], df_ventas.at[idx, 'Perfil'] = m, p, perf
         df_ventas.at[idx, 'Costo'], df_ventas.at[idx, 'Precio'] = costo, precio
-        df_ventas.to_csv(VENTAS_FILE, index=False)
+        save_df(df_ventas, "Ventas")
         st.rerun()
 
 @st.dialog("Nueva Venta")
@@ -347,12 +348,10 @@ def nueva_venta_popup():
                 with ca: mv = st.text_input("Correo")
                 with cb: pv = st.text_input("Pass")
         else:
-            # --- UPSELL PARA NUEVA VENTA ---
             st.warning("🚀 **¡Automatiza tus ventas!**")
             st.caption("Obtén acceso a la bóveda de cuentas YouTube por solo **S/ 5.00** y olvídate de crear correos a mano.")
             msj_up = f"Hola Admin, soy {st.session_state.user}. Quiero activar mi acceso a la bóveda de YouTube Premium por S/ 5.00."
             st.link_button("📲 Solicitar Activación al Admin", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up)}", use_container_width=True)
-            
             st.info("Por ahora, ingresa los datos de la cuenta que creaste manualmente:")
             with ca: mv = st.text_input("Correo Manual")
             with cb: pv = st.text_input("Clave Manual")
@@ -362,7 +361,9 @@ def nueva_venta_popup():
     
     if st.button("REGISTRAR VENTA", type="primary", use_container_width=True):
         nueva = pd.DataFrame([[ "🟢", nom, limpiar_whatsapp(tel), prod, mv, pv, "nan", "nan", venc, st.session_state.user, costo, precio ]], columns=df_ventas.columns)
-        pd.concat([df_ventas, nueva], ignore_index=True).to_csv(VENTAS_FILE, index=False)
+        global df_ventas
+        df_ventas = pd.concat([df_ventas, nueva], ignore_index=True)
+        save_df(df_ventas, "Ventas")
         st.rerun()
 
 # ==============================================================================
@@ -372,7 +373,6 @@ with st.sidebar:
     st.title("🚀 NEXA-Stream")
     st.caption(f"👤 {st.session_state.user} | Nivel: {st.session_state.role}")
     
-    # --- UPSELL EN EL MENÚ LATERAL (Constante) ---
     if st.session_state.role != "Admin" and st.session_state.acceso_yt == "No":
         st.info("🔓 **Mejora tu cuenta**\n\nAccede a la bóveda automática de YouTube por **S/ 5.00**.")
         msj_up_menu = f"Hola Admin, soy {st.session_state.user}. Quiero adquirir el acceso a la bóveda de YouTube por S/ 5.00."
@@ -402,12 +402,10 @@ if menu == "📊 Panel de Ventas":
     if st.session_state.role == "Admin":
         cupos_disponibles = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
         if cupos_disponibles <= 2:
-            st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos de YouTube Premium automáticos.")
+            st.error(f"🚨 **¡ATENCIÓN INVENTARIO!** Solo quedan **{cupos_disponibles}** cupos automáticos.")
 
     if st.session_state.role == "Admin":
-        tipo_filtro = st.selectbox("👥 Filtro de Vendedores:", 
-            ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."])
-            
+        tipo_filtro = st.selectbox("👥 Filtro de Vendedores:", ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."])
         if tipo_filtro == "🌎 Mostrar Todos": df_mostrar = df_ventas
         elif tipo_filtro == "👥 Todos sin Admin": df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
         elif tipo_filtro == "👑 Solo Admin": df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
@@ -471,9 +469,12 @@ if menu == "📊 Panel de Ventas":
                     if st.button("📝 Editar", key=f"e_{idx}", use_container_width=True): editar_venta_popup(idx, row)
                 with cols[3]:
                     if st.button("🗑️ Papelera", key=f"v_{idx}", use_container_width=True):
+                        global df_ex_clientes, df_ventas
                         df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
-                        df_ex_clientes.to_csv(EX_CLIENTES_FILE, index=False)
-                        df_ventas.drop(idx).to_csv(VENTAS_FILE, index=False); st.rerun()
+                        save_df(df_ex_clientes, "ExClientes")
+                        df_ventas = df_ventas.drop(idx)
+                        save_df(df_ventas, "Ventas")
+                        st.rerun()
     else: st.info("No hay registros que coincidan con los filtros.")
 
 elif menu == "📈 Dashboard":
@@ -541,7 +542,10 @@ elif menu == "📂 Ex-Clientes":
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
                 if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
-                    df_ex_clientes.drop(idx).to_csv(EX_CLIENTES_FILE, index=False); st.rerun()
+                    global df_ex_clientes
+                    df_ex_clientes = df_ex_clientes.drop(idx)
+                    save_df(df_ex_clientes, "ExClientes")
+                    st.rerun()
 
 elif menu == "📦 Inventario YT":
     st.header("Inventario YouTube")
@@ -574,8 +578,9 @@ elif menu == "📦 Inventario YT":
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
+                global df_inv
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
-                df_inv.to_csv(INV_FILE, index=False)
+                save_df(df_inv, "Inventario")
                 st.session_state.temp_emails = []
                 st.success("¡Cuentas añadidas exitosamente al inventario!")
                 st.rerun()
@@ -590,7 +595,10 @@ elif menu == "📦 Inventario YT":
             u = st.selectbox("Usos", [0,1,2])
             if st.button("Guardar"):
                 ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
-                pd.concat([df_inv, ni], ignore_index=True).to_csv(INV_FILE, index=False); st.rerun()
+                global df_inv
+                df_inv = pd.concat([df_inv, ni], ignore_index=True)
+                save_df(df_inv, "Inventario")
+                st.rerun()
         add()
     for idx, row in df_inv.iterrows():
         with st.container(border=True):
@@ -605,11 +613,14 @@ elif menu == "📦 Inventario YT":
                         na = st.text_input("Asignado a", value=row['Asignado_A'])
                         if st.button("Actualizar"):
                             df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
-                            df_inv.to_csv(INV_FILE, index=False); st.rerun()
+                            save_df(df_inv, "Inventario")
+                            st.rerun()
                     edi()
             with c2:
                 if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
-                    df_inv.drop(idx).to_csv(INV_FILE, index=False); st.rerun()
+                    df_inv = df_inv.drop(idx)
+                    save_df(df_inv, "Inventario")
+                    st.rerun()
 
 elif menu == "👥 Vendedores":
     st.header("Control de Personal")
@@ -623,7 +634,8 @@ elif menu == "👥 Vendedores":
             df_usuarios.at[idx, 'Telefono'] = n_tel
             df_usuarios.at[idx, 'Password'] = n_pwd
             df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
-            df_usuarios.to_csv(USUARIOS_FILE, index=False); st.rerun()
+            save_df(df_usuarios, "Usuarios")
+            st.rerun()
             
     if st.session_state.nuevo_vend_usr:
         usr_gen = st.session_state.nuevo_vend_usr
@@ -654,8 +666,9 @@ elif menu == "👥 Vendedores":
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
+                        global df_usuarios
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
-                        df_usuarios.to_csv(USUARIOS_FILE, index=False)
+                        save_df(df_usuarios, "Usuarios")
                         st.session_state.nuevo_vend_usr = usr_generado
                         st.session_state.nuevo_vend_pwd = pwd_generada
                         st.session_state.nuevo_vend_nom = nuevo_nom
@@ -676,16 +689,18 @@ elif menu == "👥 Vendedores":
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
-                        df_usuarios.drop(idx).to_csv(USUARIOS_FILE, index=False); st.rerun()
+                        df_usuarios = df_usuarios.drop(idx)
+                        save_df(df_usuarios, "Usuarios")
+                        st.rerun()
 
 elif menu == "⚙️ Configuración":
     st.header("Configuración del Sistema")
     with st.expander("📝 Editar Plantillas de WhatsApp", expanded=False):
         st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
         with st.form("form_plantillas"):
-            rec = st.text_area("1️⃣ Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa["recordatorio"], height=80)
-            ven = st.text_area("2️⃣ Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa["vencido"], height=80)
-            ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa["vendedor"], height=100)
+            rec = st.text_area("1️⃣ Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa.get("recordatorio", ""), height=80)
+            ven = st.text_area("2️⃣ Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa.get("vencido", ""), height=80)
+            ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa.get("vendedor", ""), height=100)
             if st.form_submit_button("💾 Guardar Plantillas", type="primary", use_container_width=True):
                 plantillas_wa["recordatorio"] = rec
                 plantillas_wa["vencido"] = ven
@@ -701,9 +716,12 @@ elif menu == "⚙️ Configuración":
         if st.button("Añadir", use_container_width=True):
             if nueva_p and nueva_p not in lista_plataformas:
                 lista_plataformas.append(nueva_p)
-                pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False); st.rerun()
+                save_df(pd.DataFrame(lista_plataformas, columns=["Nombre"]), "Plataformas")
+                st.rerun()
     for p in lista_plataformas:
         cp1, cp2 = st.columns([4, 1])
         cp1.write(f"📺 {p}")
         if cp2.button("🗑️", key=f"del_p_{p}", use_container_width=True):
-            lista_plataformas.remove(p); pd.DataFrame(lista_plataformas, columns=["Nombre"]).to_csv(PLAT_FILE, index=False); st.rerun()
+            lista_plataformas.remove(p)
+            save_df(pd.DataFrame(lista_plataformas, columns=["Nombre"]), "Plataformas")
+            st.rerun()
