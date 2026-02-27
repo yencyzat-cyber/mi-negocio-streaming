@@ -14,7 +14,7 @@ from google.oauth2.service_account import Credentials
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.0 (Google Sheets DB)"
+VERSION_APP = "2.1 (Google Sheets DB - Fix)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -280,6 +280,7 @@ def renovar_venta_popup(idx, row):
             with cb: pv = st.text_input("Nueva Clave")
             
     if st.button("CONFIRMAR RENOVACIÓN", type="primary", use_container_width=True):
+        global df_ventas
         df_ventas.at[idx, 'Vencimiento'] = nueva_fecha
         df_ventas.at[idx, 'Correo'] = mv
         df_ventas.at[idx, 'Pass'] = pv
@@ -304,6 +305,7 @@ def editar_venta_popup(idx, row):
     p = st.text_input("Pass", value=row['Pass'])
     perf = st.text_input("Perfil", value=row['Perfil'])
     if st.button("ACTUALIZAR", type="primary", use_container_width=True):
+        global df_ventas
         df_ventas.at[idx, 'Cliente'], df_ventas.at[idx, 'WhatsApp'] = nom, limpiar_whatsapp(tel)
         df_ventas.at[idx, 'Producto'], df_ventas.at[idx, 'Vencimiento'] = prod, venc
         df_ventas.at[idx, 'Correo'], df_ventas.at[idx, 'Pass'], df_ventas.at[idx, 'Perfil'] = m, p, perf
@@ -360,8 +362,8 @@ def nueva_venta_popup():
         with cb: pv = st.text_input("Pass")
     
     if st.button("REGISTRAR VENTA", type="primary", use_container_width=True):
-        nueva = pd.DataFrame([[ "🟢", nom, limpiar_whatsapp(tel), prod, mv, pv, "nan", "nan", venc, st.session_state.user, costo, precio ]], columns=df_ventas.columns)
         global df_ventas
+        nueva = pd.DataFrame([[ "🟢", nom, limpiar_whatsapp(tel), prod, mv, pv, "nan", "nan", venc, st.session_state.user, costo, precio ]], columns=df_ventas.columns)
         df_ventas = pd.concat([df_ventas, nueva], ignore_index=True)
         save_df(df_ventas, "Ventas")
         st.rerun()
@@ -577,8 +579,8 @@ elif menu == "📦 Inventario YT":
                         st.rerun()
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
-                nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 global df_inv
+                nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
                 st.session_state.temp_emails = []
@@ -594,8 +596,8 @@ elif menu == "📦 Inventario YT":
             p = st.text_input("Contraseña")
             u = st.selectbox("Usos", [0,1,2])
             if st.button("Guardar"):
-                ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
                 global df_inv
+                ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, ni], ignore_index=True)
                 save_df(df_inv, "Inventario")
                 st.rerun()
@@ -612,12 +614,14 @@ elif menu == "📦 Inventario YT":
                         nu = st.selectbox("Usos", [0,1,2], index=int(row['Usos']))
                         na = st.text_input("Asignado a", value=row['Asignado_A'])
                         if st.button("Actualizar"):
+                            global df_inv
                             df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
                             save_df(df_inv, "Inventario")
                             st.rerun()
                     edi()
             with c2:
                 if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
+                    global df_inv
                     df_inv = df_inv.drop(idx)
                     save_df(df_inv, "Inventario")
                     st.rerun()
@@ -631,6 +635,7 @@ elif menu == "👥 Vendedores":
         n_pwd = st.text_input("Nueva Contraseña", value=row['Password'])
         n_acc = st.checkbox("✅ Acceso a YouTube Auto", value=(row['Acceso_YT'] == 'Si'))
         if st.button("Actualizar", type="primary", use_container_width=True):
+            global df_usuarios
             df_usuarios.at[idx, 'Telefono'] = n_tel
             df_usuarios.at[idx, 'Password'] = n_pwd
             df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
@@ -665,8 +670,8 @@ elif menu == "👥 Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
-                        nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         global df_usuarios
+                        nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
                         st.session_state.nuevo_vend_usr = usr_generado
@@ -689,6 +694,7 @@ elif menu == "👥 Vendedores":
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
+                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
                         st.rerun()
