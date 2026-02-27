@@ -14,7 +14,7 @@ from google.oauth2.service_account import Credentials
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.4 (Google DB - Sistema Anti-Bloqueos)"
+VERSION_APP = "2.4"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
