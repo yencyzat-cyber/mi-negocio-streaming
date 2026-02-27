@@ -14,7 +14,7 @@ from google.oauth2.service_account import Credentials
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.2 (Google Sheets DB - Fix Final)"
+VERSION_APP = "2.3 (Google Sheets DB - Funcional)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -185,7 +185,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN (AQUÍ ESTÁN LOS GLOBALS PERMITIDOS)
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
