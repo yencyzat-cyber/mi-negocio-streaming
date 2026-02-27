@@ -14,7 +14,7 @@ from google.oauth2.service_account import Credentials
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.3 (Google Sheets DB - Funcional)"
+VERSION_APP = "2.4 (Google DB - Sistema Anti-Bloqueos)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -51,7 +51,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: CONEXIÓN GOOGLE SHEETS Y DATOS
+# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS (SISTEMA DE CACHÉ ANTI-BLOQUEOS)
 # ==============================================================================
 @st.cache_resource
 def init_gsheets():
@@ -62,29 +62,39 @@ def init_gsheets():
         client = gspread.authorize(creds)
         return client.open_by_url(st.secrets["URL_EXCEL"])
     except Exception as e:
-        st.error(f"Error al conectar con Google Sheets. Verifica tus Secrets. Detalles: {e}")
+        st.error("Error al conectar con Google Sheets. Verifica tus Secrets.")
         st.stop()
 
 sh = init_gsheets()
 
-def load_df(ws_name, cols):
+# 🔥 MEMORIA CACHÉ: Protege a la app de que Google la bloquee por exceso de peticiones
+@st.cache_data(ttl=60, show_spinner=False)
+def get_sheet_records(ws_name):
     try:
         ws = sh.worksheet(ws_name)
+        return ws.get_all_records(), True
     except gspread.exceptions.WorksheetNotFound:
+        return [], False
+
+def load_df(ws_name, cols):
+    data, exists = get_sheet_records(ws_name)
+    if not exists:
         ws = sh.add_worksheet(title=ws_name, rows="1000", cols="20")
         ws.update(values=[cols], range_name="A1")
-    
-    data = ws.get_all_records()
-    if not data: return pd.DataFrame(columns=cols)
-    return pd.DataFrame(data)
+        get_sheet_records.clear() # Limpia la caché para leer la nueva hoja
+        return pd.DataFrame(columns=cols)
+    if not data:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(data).copy() # Retorna una copia para proteger la caché
 
 def save_df(df, ws_name):
     ws = sh.worksheet(ws_name)
     ws.clear()
     df_str = df.fillna("").astype(str)
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
+    get_sheet_records.clear() # Magia: Obliga al sistema a descargar los datos frescos solo tras guardar
 
-# --- CARGAR TABLAS DESDE LA NUBE ---
+# --- CARGAR TABLAS ---
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio"]
 df_ventas = load_df("Ventas", cols_ventas)
 df_ventas['Vencimiento'] = pd.to_datetime(df_ventas['Vencimiento'], errors='coerce').dt.date
@@ -185,7 +195,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN (AQUÍ ESTÁN LOS GLOBALS PERMITIDOS)
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
@@ -539,6 +549,7 @@ elif menu == "📂 Ex-Clientes":
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
                 if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
+                    global df_ex_clientes
                     df_ex_clientes = df_ex_clientes.drop(idx)
                     save_df(df_ex_clientes, "ExClientes")
                     st.rerun()
@@ -573,6 +584,7 @@ elif menu == "📦 Inventario YT":
                         st.rerun()
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
+                global df_inv
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
@@ -614,6 +626,7 @@ elif menu == "📦 Inventario YT":
                     edi()
             with c2:
                 if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
+                    global df_inv
                     df_inv = df_inv.drop(idx)
                     save_df(df_inv, "Inventario")
                     st.rerun()
@@ -662,6 +675,7 @@ elif menu == "👥 Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
+                        global df_usuarios
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
@@ -685,6 +699,7 @@ elif menu == "👥 Vendedores":
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
+                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
                         st.rerun()
