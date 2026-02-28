@@ -16,12 +16,12 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "3.1 (UX Premium & Fix Definitivo)"
+VERSION_APP = "3.2 (Menú Futurista Neón)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
 
-st.set_page_config(page_title="NEXA-Stream", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="NEXA-Stream", page_icon="🚀", layout="wide", initial_sidebar_state="collapsed")
 
 # Sistema inteligente de Notificaciones Toast
 if 'toast_msg' not in st.session_state:
@@ -37,6 +37,7 @@ st.markdown(f"""
         position: fixed; top: 15px; right: 70px; background-color: rgba(0, 210, 106, 0.2);
         color: #00D26A; padding: 4px 10px; border-radius: 12px; font-size: 12px;
         font-weight: bold; z-index: 999999; pointer-events: none; border: 1px solid #00D26A;
+        box-shadow: 0 0 10px rgba(0, 210, 106, 0.5);
     }}
     </style>
     <div class="version-corner">v{VERSION_APP}</div>
@@ -256,7 +257,7 @@ if not st.session_state.logged_in:
                         st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
                         st.session_state.alertas_vistas = False
                         cookies.set('nexa_user_cookie', match.iloc[0]['Usuario'])
-                        st.session_state.toast_msg = f"👋 ¡Hola de nuevo, {match.iloc[0]['Usuario']}!"
+                        st.session_state.toast_msg = f"👋 ¡Bienvenido de nuevo, {match.iloc[0]['Usuario']}!"
                         st.rerun()
                     else: 
                         st.error("❌ Credenciales incorrectas.")
@@ -449,45 +450,62 @@ def nueva_venta_popup():
         st.rerun()
 
 # ==============================================================================
-# BLOQUE 6: NAVEGACIÓN LATERAL PREMIUM
+# BLOQUE 6: MENÚ FUTURISTA NEÓN (SUPERIOR) & SIDEBAR PERFIL
 # ==============================================================================
+# 1. El Menú Flotante Superior (Horizontal)
+if st.session_state.role == "Admin":
+    opciones_menu = ["Ventas", "Dashboard", "Inventario", "Papelera", "Vendedores", "Ajustes"]
+    iconos_menu = ["cart-check-fill", "bar-chart-fill", "youtube", "trash3-fill", "people-fill", "gear-fill"]
+else:
+    opciones_menu = ["Ventas", "Dashboard", "Papelera"]
+    iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill"]
+
+menu = option_menu(
+    menu_title=None,
+    options=opciones_menu,
+    icons=iconos_menu,
+    default_index=0,
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "5px", "background-color": "#131620", "border": "1px solid #2A2F3D", "border-radius": "15px", "margin-bottom": "20px"},
+        "icon": {"color": "#00D26A", "font-size": "16px"},
+        "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px", "padding": "8px 10px", "--hover-color": "#1A1E2C", "border-radius": "10px"},
+        "nav-link-selected": {
+            "background-color": "rgba(0, 210, 106, 0.15)", 
+            "color": "#00D26A", 
+            "font-weight": "bold", 
+            "border": "1px solid #00D26A",
+            "box-shadow": "0 0 12px rgba(0, 210, 106, 0.4)" # Efecto Glow Neón
+        },
+    }
+)
+
+# 2. La Barra Lateral limpia solo para perfil de usuario
 with st.sidebar:
     st.markdown("""
         <div style="text-align: center; padding-bottom: 20px;">
-            <h1 style="color: #00D26A; margin-bottom:0;">NEXA</h1>
-            <h3 style="margin-top:0; color: white;">STREAM</h3>
-            <p style="color: #888; font-size: 14px;">👤 {user} | {rol}</p>
+            <h1 style="color: #00D26A; margin-bottom:0; text-shadow: 0 0 10px rgba(0,210,106,0.3);">NEXA</h1>
+            <h3 style="margin-top:0; color: white; letter-spacing: 2px;">STREAM</h3>
         </div>
-    """.format(user=st.session_state.user, rol=st.session_state.role), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     
-    if st.session_state.role != "Admin" and st.session_state.acceso_yt == "No":
-        st.info("🔓 **Mejora tu cuenta**\nAccede a la bóveda de YouTube.")
+    with st.container(border=True):
+        st.markdown(f"""
+        <div style="text-align: center;">
+            <div style="font-size: 40px; margin-bottom: -10px;">🧑‍🚀</div>
+            <h3 style="margin-bottom: 0px; color: #00D26A;">{st.session_state.user}</h3>
+            <p style="color: #aaa; font-size: 14px;">Nivel: <b>{st.session_state.role}</b></p>
+        </div>
+        """, unsafe_allow_html=True)
         
-    st.divider()
-    
-    if st.session_state.role == "Admin":
-        opciones_menu = ["Panel de Ventas", "Dashboard", "Ex-Clientes", "Inventario YT", "Vendedores", "Configuración"]
-        iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill", "youtube", "people-fill", "gear-fill"]
-    else:
-        opciones_menu = ["Panel de Ventas", "Dashboard", "Ex-Clientes"]
-        iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill"]
-
-    menu = option_menu(
-        menu_title=None,
-        options=opciones_menu,
-        icons=iconos_menu,
-        menu_icon="cast",
-        default_index=0,
-        styles={
-            "container": {"padding": "0!important", "background-color": "transparent"},
-            "icon": {"color": "#00D26A", "font-size": "18px"},
-            "nav-link": {"font-size": "15px", "text-align": "left", "margin":"2px", "--hover-color": "#262730"},
-            "nav-link-selected": {"background-color": "#00D26A", "color": "white", "font-weight": "bold"},
-        }
-    )
-    
-    st.divider()
-    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+    if st.session_state.role != "Admin" and st.session_state.acceso_yt == "No":
+        st.info("🔓 **Desbloquea Bóveda**\nAccede a YouTube Automático.")
+        msj_up_menu = f"Hola Admin, soy {st.session_state.user}. Quiero adquirir el acceso a la bóveda de YouTube por S/ 5.00."
+        st.link_button("📲 Activar Nivel", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up_menu)}", use_container_width=True)
+        
+    st.write("")
+    st.write("")
+    if st.button("🚪 Cerrar Sistema", use_container_width=True):
         cookies.remove('nexa_user_cookie') 
         st.session_state.logged_in = False
         st.rerun()
@@ -496,22 +514,20 @@ with st.sidebar:
 # VISTAS PRINCIPALES
 # ==============================================================================
 
-if menu == "Panel de Ventas":
-    st.header("🎯 Gestión de Suscripciones")
-    
+if menu == "Ventas":
     if st.session_state.role == "Admin":
         cupos_disponibles = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
         if cupos_disponibles <= 2:
-            st.error(f"🚨 **¡ATENCIÓN!** Solo quedan **{cupos_disponibles}** cupos automáticos.")
+            st.error(f"🚨 **¡ALERTA INVENTARIO!** Quedan **{cupos_disponibles}** cupos de YouTube automáticos.")
 
     if st.session_state.role == "Admin":
-        tipo_filtro = st.selectbox("👥 Filtro de Vendedores:", ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Personalizado..."], label_visibility="collapsed")
-        if tipo_filtro == "🌎 Mostrar Todos": df_mostrar = df_ventas
-        elif tipo_filtro == "👥 Todos sin Admin": df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
-        elif tipo_filtro == "👑 Solo Admin": df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
+        tipo_filtro = st.selectbox("👥 Filtro Vendedores:", ["🌎 Todos", "👥 Equipo", "👑 Mi Cuenta", "🎯 Buscar..."], label_visibility="collapsed")
+        if tipo_filtro == "🌎 Todos": df_mostrar = df_ventas
+        elif tipo_filtro == "👥 Equipo": df_mostrar = df_ventas[df_ventas['Vendedor'] != st.session_state.user]
+        elif tipo_filtro == "👑 Mi Cuenta": df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
         else:
             lista_v = sorted(list(set(df_ventas['Vendedor'].dropna().tolist() + df_usuarios['Usuario'].tolist())))
-            vend_sel = st.multiselect("Vendedores:", lista_v, default=lista_v)
+            vend_sel = st.multiselect("Seleccionar:", lista_v, default=lista_v)
             df_mostrar = df_ventas[df_ventas['Vendedor'].isin(vend_sel)]
     else: df_mostrar = df_ventas[df_ventas['Vendedor'] == st.session_state.user]
 
@@ -523,17 +539,17 @@ if menu == "Panel de Ventas":
         
     h1, h2 = st.columns([3, 1])
     with h1: 
-        if st.button("➕ REGISTRAR NUEVA VENTA", type="primary", use_container_width=True): nueva_venta_popup()
+        if st.button("➕ CREAR NUEVA VENTA", type="primary", use_container_width=True): nueva_venta_popup()
     with h2: 
-        if st.button("🔔 Alertas", use_container_width=True):
+        if st.button("🔔 Ver Alertas", use_container_width=True):
             st.session_state.alertas_vistas = False
             st.rerun()
             
     st.write("")
-    filtro_est = st.radio("Estado de Cuenta:", ["🌎 Todas", "🟢 Activas", "🟠 Por Vencer", "🔴 Vencidas"], horizontal=True, label_visibility="collapsed")
+    filtro_est = st.radio("Filtro Estado:", ["🌎 Todas", "🟢 Activas", "🟠 Por Vencer", "🔴 Vencidas"], horizontal=True, label_visibility="collapsed")
     
     c_f1, c_f2 = st.columns([2, 1])
-    search = c_f1.text_input("", placeholder="🔍 Buscar por nombre o número...", label_visibility="collapsed")
+    search = c_f1.text_input("", placeholder="🔍 Buscar cliente o número...", label_visibility="collapsed")
     filtro_plat = c_f2.selectbox("Plataforma", ["Todas las Plataformas"] + lista_plataformas, label_visibility="collapsed")
 
     if search: mask_search = df_mostrar.apply(lambda r: search.lower() in str(r).lower(), axis=1); df_mostrar = df_mostrar[mask_search]
@@ -565,7 +581,7 @@ if menu == "Panel de Ventas":
             wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
             
             with st.container(border=True):
-                vendedor_badge = f" • 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" else ""
+                vendedor_badge = f" • 🧑‍🚀 {row['Vendedor']}" if st.session_state.role == "Admin" else ""
                 st.markdown(f"""
                 <div style="margin-bottom: 5px;">
                     <h4 style="margin:0; padding:0; display:inline-block; margin-right: 10px;">👤 {row['Cliente']}</h4>
@@ -579,7 +595,7 @@ if menu == "Panel de Ventas":
                 
                 st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
                 cols = st.columns(4)
-                with cols[0]: st.link_button("📲 Notificar", wa_url, use_container_width=True)
+                with cols[0]: st.link_button("📲 Avisar", wa_url, use_container_width=True)
                 with cols[1]: 
                     if st.button("🔄 Renovar", key=f"r_{idx}", use_container_width=True): renovar_venta_popup(idx, row)
                 with cols[2]: 
@@ -593,10 +609,9 @@ if menu == "Panel de Ventas":
                         st.session_state.toast_msg = "🗑️ Enviado a papelera."
                         st.rerun()
     else: 
-        st.info("No hay registros que coincidan con la búsqueda.")
+        st.info("No se encontraron clientes.")
 
 elif menu == "Dashboard":
-    st.header("📈 Análisis Financiero")
     
     if st.session_state.role == "Admin": 
         tipo_filtro_dash = st.selectbox("Filtro de Vendedores:", 
@@ -619,7 +634,7 @@ elif menu == "Dashboard":
         formato_opciones = lambda x: "Histórico Global (Todo)" if x == "Histórico Global" else formatear_mes_anio(x)
         
         st.write("")
-        periodo_sel = st.radio("📅 Selecciona el periodo mensual:", opciones_periodos, format_func=formato_opciones, horizontal=True)
+        periodo_sel = st.radio("📅 Filtrar por periodo:", opciones_periodos, format_func=formato_opciones, horizontal=True)
         
         if periodo_sel != "Histórico Global": df_dash = df_dash_base[df_dash_base['Periodo'] == periodo_sel]
         else: df_dash = df_dash_base
@@ -634,14 +649,14 @@ elif menu == "Dashboard":
             total_ganancia = total_ingresos - total_costos
             total_clientes = len(df_dash)
             
+            # HERO METRICS
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("👥 Clientes Activos", f"{total_clientes}")
+            c1.metric("👥 Clientes", f"{total_clientes}")
             c2.metric("💰 Ventas Brutas", f"S/ {total_ingresos:.2f}")
-            c3.metric("📉 Costos", f"S/ {total_costos:.2f}")
+            c3.metric("📉 Costos Totales", f"S/ {total_costos:.2f}")
             c4.metric("🚀 GANANCIA NETA", f"S/ {total_ganancia:.2f}")
             
             st.write("---")
-            st.subheader("Distribución de Plataformas")
             ventas_plat = df_dash['Producto'].value_counts().reset_index()
             ventas_plat.columns = ['Plataforma', 'Cantidad']
             grafico_anillo = alt.Chart(ventas_plat).mark_arc(innerRadius=60).encode(
@@ -651,8 +666,7 @@ elif menu == "Dashboard":
             ).properties(height=350).configure_view(strokeWidth=0).configure_legend(labelFontSize=14, titleFontSize=15)
             st.altair_chart(grafico_anillo, use_container_width=True)
 
-elif menu == "Ex-Clientes":
-    st.header("📂 Historial y Papelera")
+elif menu == "Papelera":
     df_ex_mostrar = df_ex_clientes if st.session_state.role == "Admin" else df_ex_clientes[df_ex_clientes['Vendedor'] == st.session_state.user]
     if df_ex_mostrar.empty: st.info("La papelera está limpia.")
     else:
@@ -660,18 +674,17 @@ elif menu == "Ex-Clientes":
             with st.container(border=True):
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
-                if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
+                if c2.button("🗑️ Destruir", key=f"ex_{idx}", use_container_width=True):
+                    global df_ex_clientes
                     df_ex_clientes = df_ex_clientes.drop(idx)
                     save_df(df_ex_clientes, "ExClientes")
-                    st.session_state.toast_msg = "✅ Borrado permanentemente."
+                    st.session_state.toast_msg = "✅ Borrado permanente."
                     st.rerun()
 
-elif menu == "Inventario YT":
-    st.header("📦 Inventario YouTube")
-    
-    with st.expander("⚡ Asistente de Creación Masiva", expanded=True):
-        st.info("💡 Toca el ícono de copiar al lado de cada bloque para pegarlo directamente en Google.")
-        if st.button("🔄 Generar 10 Perfiles", use_container_width=True):
+elif menu == "Inventario":
+    with st.expander("⚡ IA: Generador de Perfiles Automático", expanded=True):
+        st.info("💡 Haz clic en el texto para copiarlo y pegarlo en Google.")
+        if st.button("🔄 Generar 10 Correos", use_container_width=True):
             st.session_state.temp_emails = generar_lote_correos(10)
             st.rerun()
         if st.session_state.temp_emails:
@@ -695,69 +708,69 @@ elif menu == "Inventario YT":
                         st.session_state.temp_emails.pop(i)
                         st.rerun()
             st.write("---")
-            if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
+            if st.button("✅ Confirmar y Guardar Todo", type="primary", use_container_width=True):
+                global df_inv
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
                 st.session_state.temp_emails = []
-                st.session_state.toast_msg = "✅ Lote guardado con éxito."
+                st.session_state.toast_msg = "✅ Banco de cuentas actualizado."
                 st.rerun()
                 
     st.write("---")
     
-    if st.button("➕ NUEVO CORREO MANUAL", type="primary", use_container_width=True):
+    if st.button("➕ INGRESAR CORREO MANUAL", type="primary", use_container_width=True):
         @st.dialog("Registrar Correo")
         def add():
             global df_inv
             m = st.text_input("Gmail")
             p = st.text_input("Contraseña")
-            u = st.selectbox("Usos", [0,1,2])
-            if st.button("Guardar"):
+            u = st.selectbox("Usos Registrados", [0,1,2])
+            if st.button("Guardar en Bóveda"):
                 ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, ni], ignore_index=True)
                 save_df(df_inv, "Inventario")
-                st.session_state.toast_msg = "✅ Correo guardado."
+                st.session_state.toast_msg = "✅ Cuenta guardada."
                 st.rerun()
         add()
     for idx, row in df_inv.iterrows():
         with st.container(border=True):
-            st.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
+            st.write(f"📧 **{row['Correo']}** (Cupos usados: {row['Usos']})")
             st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("📝 Editar", key=f"ei_{idx}", use_container_width=True): 
+                if st.button("📝 Ajustar", key=f"ei_{idx}", use_container_width=True): 
                     @st.dialog("Modificar")
                     def edi():
                         global df_inv
                         nu = st.selectbox("Usos", [0,1,2], index=int(row['Usos']))
                         na = st.text_input("Asignado a", value=row['Asignado_A'])
-                        if st.button("Actualizar"):
+                        if st.button("Actualizar Bóveda"):
                             df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
                             save_df(df_inv, "Inventario")
                             st.rerun()
                     edi()
             with c2:
-                if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True):
+                if st.button("🗑️ Eliminar", key=f"di_{idx}", use_container_width=True):
                     df_inv = df_inv.drop(idx)
                     save_df(df_inv, "Inventario")
-                    st.session_state.toast_msg = "🗑️ Borrado del inventario."
+                    st.session_state.toast_msg = "🗑️ Cuenta descartada."
                     st.rerun()
 
 elif menu == "Vendedores":
-    st.header("👥 Control de Personal")
     @st.dialog("Editar Vendedor")
     def editar_vendedor_popup(idx, row):
         global df_usuarios
-        st.write(f"Editando a: **{row['Usuario']}**")
-        n_tel = st.text_input("Teléfono", value=row['Telefono'])
+        st.write(f"Editando Perfil: **{row['Usuario']}**")
+        n_tel = st.text_input("Teléfono WhatsApp", value=row['Telefono'])
         n_pwd = st.text_input("Nueva Contraseña", value=row['Password'])
-        n_acc = st.checkbox("✅ Acceso a YouTube Auto", value=(row['Acceso_YT'] == 'Si'))
-        if st.button("Actualizar", type="primary", use_container_width=True):
+        n_acc = st.checkbox("✅ Permitir sacar cuentas de la Bóveda YouTube", value=(row['Acceso_YT'] == 'Si'))
+        if st.button("Actualizar Permisos", type="primary", use_container_width=True):
             df_usuarios.at[idx, 'Telefono'] = n_tel
             df_usuarios.at[idx, 'Password'] = n_pwd
             df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
             save_df(df_usuarios, "Usuarios")
-            st.session_state.toast_msg = "✅ Vendedor actualizado."
+            st.session_state.toast_msg = "✅ Perfil actualizado."
             st.rerun()
             
     if st.session_state.nuevo_vend_usr:
@@ -767,27 +780,28 @@ elif menu == "Vendedores":
         tel_gen = st.session_state.nuevo_vend_tel
         texto_wa = plantillas_wa["vendedor"].replace("{nombre}", nom_gen).replace("{usuario}", usr_gen).replace("{password}", pwd_gen).replace("{link}", LINK_APP)
         enlace_wa = f"https://wa.me/{tel_gen}?text={quote(texto_wa)}"
-        st.success("✅ ¡PERFIL CREADO CON ÉXITO!")
-        st.info(f"**Usuario:** {usr_gen} | **Contraseña:** {pwd_gen}")
+        st.success("✅ ¡Credenciales Generadas!")
+        st.info(f"**Usuario:** {usr_gen} | **Clave:** {pwd_gen}")
         col_wa, col_ok = st.columns(2)
-        col_wa.link_button("📲 Enviar clave", enlace_wa, use_container_width=True)
-        if col_ok.button("✅ Ocultar", use_container_width=True):
+        col_wa.link_button("📲 Mandar por WhatsApp", enlace_wa, use_container_width=True)
+        if col_ok.button("✅ Ocultar Info", use_container_width=True):
             st.session_state.nuevo_vend_usr = None
             st.rerun()
     else:
         with st.container(border=True):
-            st.subheader("➕ Generar Nuevo Perfil")
+            st.subheader("➕ Integrar Nuevo Vendedor")
             with st.form("form_crear_vend"):
                 col1, col2 = st.columns(2)
-                nuevo_nom = col1.text_input("Nombre (ej: Juan)")
-                nuevo_tel = col2.text_input("WhatsApp (ej: 999888777)")
-                dar_acceso_yt = st.checkbox("Dar acceso al Relleno Automático de YouTube")
-                if st.form_submit_button("Crear Perfil y Generar Clave", type="primary", use_container_width=True):
+                nuevo_nom = col1.text_input("Nombre de Pila (Ej: Juan)")
+                nuevo_tel = col2.text_input("WhatsApp (Ej: 999888777)")
+                dar_acceso_yt = st.checkbox("Dar acceso a la Bóveda Automática de YouTube")
+                if st.form_submit_button("Generar Credenciales", type="primary", use_container_width=True):
                     if nuevo_nom and nuevo_tel:
                         usr_generado = generar_usuario(nuevo_nom)
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
+                        global df_usuarios
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
@@ -795,59 +809,59 @@ elif menu == "Vendedores":
                         st.session_state.nuevo_vend_pwd = pwd_generada
                         st.session_state.nuevo_vend_nom = nuevo_nom
                         st.session_state.nuevo_vend_tel = tel_limpio
-                        st.session_state.toast_msg = "✅ Perfil creado."
+                        st.session_state.toast_msg = "✅ Usuario creado."
                         st.rerun()
-                    else: st.warning("⚠️ Llenar Nombre y Teléfono.")
+                    else: st.warning("⚠️ Faltan datos.")
     st.write("---")
     vendedores = df_usuarios[df_usuarios['Rol'] != 'Admin']
-    if vendedores.empty: st.info("Sin vendedores.")
+    if vendedores.empty: st.info("No hay equipo registrado.")
     else:
         for idx, row in vendedores.iterrows():
             with st.container(border=True):
-                st.write(f"👤 **{row['Usuario']}** | 📱 {row['Telefono']}")
-                st.caption(f"🔑 Clave: {row['Password']} | 📺 Auto-asignar YT: **{row['Acceso_YT']}**")
+                st.write(f"🧑‍🚀 **{row['Usuario']}** | 📱 {row['Telefono']}")
+                st.caption(f"🔑 Clave: {row['Password']} | 📺 Bóveda YT: **{row['Acceso_YT']}**")
                 st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
                 c_edit, c_del = st.columns(2)
                 with c_edit:
-                    if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
+                    if st.button("📝 Ajustes", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
-                    if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
+                    if st.button("🗑️ Despedir", key=f"du_{idx}", use_container_width=True):
+                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
-                        st.session_state.toast_msg = "🗑️ Vendedor eliminado."
+                        st.session_state.toast_msg = "🗑️ Vendedor retirado."
                         st.rerun()
 
-elif menu == "Configuración":
-    st.header("⚙️ Configuración General")
-    with st.expander("📝 Editar Plantillas de WhatsApp", expanded=False):
-        st.info("Usa `{cliente}`, `{producto}` y `{vencimiento}`. Para el vendedor usa `{nombre}`, `{usuario}`, `{password}` y `{link}`.")
+elif menu == "Ajustes":
+    with st.expander("📝 Configurar Bot de WhatsApp", expanded=False):
+        st.info("Variables mágicas: `{cliente}`, `{producto}`, `{vencimiento}`, `{nombre}`, `{usuario}`, `{password}`, `{link}`.")
         with st.form("form_plantillas"):
-            rec = st.text_area("1️⃣ Recordatorio (Cuenta Activa / Por vencer)", value=plantillas_wa.get("recordatorio", ""), height=80)
-            ven = st.text_area("2️⃣ Cuenta Vencida (Al llegar a 0 días)", value=plantillas_wa.get("vencido", ""), height=80)
-            ven_new = st.text_area("3️⃣ Mensaje para Vendedor Nuevo", value=plantillas_wa.get("vendedor", ""), height=100)
-            if st.form_submit_button("💾 Guardar Plantillas", type="primary", use_container_width=True):
+            rec = st.text_area("🟠 Mensaje de Recordatorio", value=plantillas_wa.get("recordatorio", ""), height=80)
+            ven = st.text_area("🔴 Mensaje de Vencimiento", value=plantillas_wa.get("vencido", ""), height=80)
+            ven_new = st.text_area("🧑‍🚀 Bienvenida a Vendedor", value=plantillas_wa.get("vendedor", ""), height=100)
+            if st.form_submit_button("💾 Actualizar Motor de Textos", type="primary", use_container_width=True):
                 plantillas_wa["recordatorio"] = rec
                 plantillas_wa["vencido"] = ven
                 plantillas_wa["vendedor"] = ven_new
                 save_templates(plantillas_wa)
-                st.session_state.toast_msg = "✅ ¡Plantillas guardadas!"
+                st.session_state.toast_msg = "✅ ¡Textos en línea!"
                 st.rerun()
     st.divider()
-    st.subheader("🛠 Plataformas")
+    st.subheader("🛠 Catálogo de Plataformas")
     c_plat, c_pbtn = st.columns([3, 1])
-    with c_plat: nueva_p = st.text_input("Nueva", label_visibility="collapsed", placeholder="Escribe el nombre...")
+    with c_plat: nueva_p = st.text_input("Nueva", label_visibility="collapsed", placeholder="Ej: Crunchyroll")
     with c_pbtn:
-        if st.button("➕ Añadir", use_container_width=True):
+        if st.button("➕ Integrar", use_container_width=True):
             if nueva_p and nueva_p not in lista_plataformas:
                 lista_plataformas.append(nueva_p)
                 save_df(pd.DataFrame(lista_plataformas, columns=["Nombre"]), "Plataformas")
-                st.session_state.toast_msg = f"✅ Plataforma {nueva_p} añadida."
+                st.session_state.toast_msg = f"✅ {nueva_p} añadida al catálogo."
                 st.rerun()
     for p in lista_plataformas:
         cp1, cp2 = st.columns([4, 1])
         cp1.write(f"📺 {p}")
-        if cp2.button("🗑️ Borrar", key=f"del_p_{p}", use_container_width=True):
+        if cp2.button("🗑️ Quitar", key=f"del_p_{p}", use_container_width=True):
             lista_plataformas.remove(p)
             save_df(pd.DataFrame(lista_plataformas, columns=["Nombre"]), "Plataformas")
-            st.session_state.toast_msg = "🗑️ Plataforma eliminada."
+            st.session_state.toast_msg = "🗑️ Eliminada del catálogo."
             st.rerun()
