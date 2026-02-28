@@ -16,7 +16,7 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "3.2 (Menú Futurista Neón)"
+VERSION_APP = "3.3 (Estabilidad y Diseño Premium)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -264,7 +264,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN (Pop-Ups)
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
@@ -449,6 +449,44 @@ def nueva_venta_popup():
         st.session_state.toast_msg = "🎉 ¡Nueva venta registrada!"
         st.rerun()
 
+@st.dialog("Registrar Correo")
+def add_correo_popup():
+    global df_inv
+    m = st.text_input("Gmail")
+    p = st.text_input("Contraseña")
+    u = st.selectbox("Usos", [0,1,2])
+    if st.button("Guardar en Bóveda"):
+        ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
+        df_inv = pd.concat([df_inv, ni], ignore_index=True)
+        save_df(df_inv, "Inventario")
+        st.session_state.toast_msg = "✅ Correo guardado."
+        st.rerun()
+
+@st.dialog("Modificar Correo")
+def edit_correo_popup(idx, row):
+    global df_inv
+    nu = st.selectbox("Usos", [0,1,2], index=int(row['Usos']))
+    na = st.text_input("Asignado a", value=row['Asignado_A'])
+    if st.button("Actualizar Bóveda"):
+        df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
+        save_df(df_inv, "Inventario")
+        st.rerun()
+
+@st.dialog("Editar Vendedor")
+def editar_vendedor_popup(idx, row):
+    global df_usuarios
+    st.write(f"Editando a: **{row['Usuario']}**")
+    n_tel = st.text_input("Teléfono", value=row['Telefono'])
+    n_pwd = st.text_input("Nueva Contraseña", value=row['Password'])
+    n_acc = st.checkbox("✅ Acceso a YouTube Auto", value=(row['Acceso_YT'] == 'Si'))
+    if st.button("Actualizar Permisos", type="primary", use_container_width=True):
+        df_usuarios.at[idx, 'Telefono'] = n_tel
+        df_usuarios.at[idx, 'Password'] = n_pwd
+        df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
+        save_df(df_usuarios, "Usuarios")
+        st.session_state.toast_msg = "✅ Vendedor actualizado."
+        st.rerun()
+
 # ==============================================================================
 # BLOQUE 6: MENÚ FUTURISTA NEÓN (SUPERIOR) & SIDEBAR PERFIL
 # ==============================================================================
@@ -475,7 +513,7 @@ menu = option_menu(
             "color": "#00D26A", 
             "font-weight": "bold", 
             "border": "1px solid #00D26A",
-            "box-shadow": "0 0 12px rgba(0, 210, 106, 0.4)" # Efecto Glow Neón
+            "box-shadow": "0 0 12px rgba(0, 210, 106, 0.4)" 
         },
     }
 )
@@ -612,7 +650,6 @@ if menu == "Ventas":
         st.info("No se encontraron clientes.")
 
 elif menu == "Dashboard":
-    
     if st.session_state.role == "Admin": 
         tipo_filtro_dash = st.selectbox("Filtro de Vendedores:", 
             ["🌎 Mostrar Todos", "👥 Todos sin Admin", "👑 Solo Admin", "🎯 Seleccionar específicos..."], key="filt_dash", label_visibility="collapsed")
@@ -675,7 +712,6 @@ elif menu == "Papelera":
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
                 if c2.button("🗑️ Destruir", key=f"ex_{idx}", use_container_width=True):
-                    global df_ex_clientes
                     df_ex_clientes = df_ex_clientes.drop(idx)
                     save_df(df_ex_clientes, "ExClientes")
                     st.session_state.toast_msg = "✅ Borrado permanente."
@@ -709,7 +745,6 @@ elif menu == "Inventario":
                         st.rerun()
             st.write("---")
             if st.button("✅ Confirmar y Guardar Todo", type="primary", use_container_width=True):
-                global df_inv
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
@@ -720,19 +755,8 @@ elif menu == "Inventario":
     st.write("---")
     
     if st.button("➕ INGRESAR CORREO MANUAL", type="primary", use_container_width=True):
-        @st.dialog("Registrar Correo")
-        def add():
-            global df_inv
-            m = st.text_input("Gmail")
-            p = st.text_input("Contraseña")
-            u = st.selectbox("Usos Registrados", [0,1,2])
-            if st.button("Guardar en Bóveda"):
-                ni = pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)
-                df_inv = pd.concat([df_inv, ni], ignore_index=True)
-                save_df(df_inv, "Inventario")
-                st.session_state.toast_msg = "✅ Cuenta guardada."
-                st.rerun()
-        add()
+        add_correo_popup()
+        
     for idx, row in df_inv.iterrows():
         with st.container(border=True):
             st.write(f"📧 **{row['Correo']}** (Cupos usados: {row['Usos']})")
@@ -740,16 +764,7 @@ elif menu == "Inventario":
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("📝 Ajustar", key=f"ei_{idx}", use_container_width=True): 
-                    @st.dialog("Modificar")
-                    def edi():
-                        global df_inv
-                        nu = st.selectbox("Usos", [0,1,2], index=int(row['Usos']))
-                        na = st.text_input("Asignado a", value=row['Asignado_A'])
-                        if st.button("Actualizar Bóveda"):
-                            df_inv.at[idx, 'Usos'], df_inv.at[idx, 'Asignado_A'] = nu, na
-                            save_df(df_inv, "Inventario")
-                            st.rerun()
-                    edi()
+                    edit_correo_popup(idx, row)
             with c2:
                 if st.button("🗑️ Eliminar", key=f"di_{idx}", use_container_width=True):
                     df_inv = df_inv.drop(idx)
@@ -758,21 +773,6 @@ elif menu == "Inventario":
                     st.rerun()
 
 elif menu == "Vendedores":
-    @st.dialog("Editar Vendedor")
-    def editar_vendedor_popup(idx, row):
-        global df_usuarios
-        st.write(f"Editando Perfil: **{row['Usuario']}**")
-        n_tel = st.text_input("Teléfono WhatsApp", value=row['Telefono'])
-        n_pwd = st.text_input("Nueva Contraseña", value=row['Password'])
-        n_acc = st.checkbox("✅ Permitir sacar cuentas de la Bóveda YouTube", value=(row['Acceso_YT'] == 'Si'))
-        if st.button("Actualizar Permisos", type="primary", use_container_width=True):
-            df_usuarios.at[idx, 'Telefono'] = n_tel
-            df_usuarios.at[idx, 'Password'] = n_pwd
-            df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
-            save_df(df_usuarios, "Usuarios")
-            st.session_state.toast_msg = "✅ Perfil actualizado."
-            st.rerun()
-            
     if st.session_state.nuevo_vend_usr:
         usr_gen = st.session_state.nuevo_vend_usr
         pwd_gen = st.session_state.nuevo_vend_pwd
@@ -801,7 +801,6 @@ elif menu == "Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
-                        global df_usuarios
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
@@ -826,7 +825,6 @@ elif menu == "Vendedores":
                     if st.button("📝 Ajustes", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Despedir", key=f"du_{idx}", use_container_width=True):
-                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
                         st.session_state.toast_msg = "🗑️ Vendedor retirado."
