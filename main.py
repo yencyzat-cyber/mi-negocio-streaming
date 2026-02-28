@@ -15,7 +15,7 @@ from streamlit_cookies_controller import CookieController
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.7 (Auto-Login & Fix Final)"
+VERSION_APP = "2.8 (Gestor de Contraseñas Nativo)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -52,7 +52,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS (SISTEMA DE CACHÉ ANTI-BLOQUEOS)
+# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS
 # ==============================================================================
 @st.cache_resource
 def init_gsheets():
@@ -161,7 +161,7 @@ def formatear_mes_anio(yyyy_mm):
     return f"{MESES_NOMBRES[m]} {y}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN Y COOKIES (AUTO-LOGIN)
+# BLOQUE 4: SISTEMA DE LOGIN Y AUTO-GUARDADO DE CREDENCIALES
 # ==============================================================================
 cookies = CookieController()
 usuario_guardado = cookies.get('nexa_user_cookie')
@@ -179,7 +179,6 @@ if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = N
 if 'nuevo_vend_nom' not in st.session_state: st.session_state.nuevo_vend_nom = None
 if 'nuevo_vend_tel' not in st.session_state: st.session_state.nuevo_vend_tel = None
 
-# Intento de Auto-Login si existe la cookie
 if not st.session_state.logged_in and usuario_guardado:
     match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
     if not match.empty:
@@ -189,29 +188,33 @@ if not st.session_state.logged_in and usuario_guardado:
         st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
         st.session_state.alertas_vistas = False
 
-# Pantalla de Login Manual
+# --- FORMULARIO OFICIAL DE LOGIN (Fuerza a Google/Apple a preguntar si guardan la clave) ---
 if not st.session_state.logged_in:
     st.title("🔐 Portal NEXA-Stream")
     with st.container(border=True):
         st.subheader("Iniciar Sesión")
-        u_in = st.text_input("Usuario")
-        p_in = st.text_input("Contraseña", type="password")
-        if st.button("Acceder", type="primary", use_container_width=True):
-            match = df_usuarios[(df_usuarios['Usuario'] == u_in) & (df_usuarios['Password'] == p_in)]
-            if not match.empty:
-                st.session_state.logged_in = True
-                st.session_state.user = match.iloc[0]['Usuario']
-                st.session_state.role = match.iloc[0]['Rol']
-                st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
-                st.session_state.alertas_vistas = False
-                # Crear la cookie de sesión
-                cookies.set('nexa_user_cookie', match.iloc[0]['Usuario'])
-                st.rerun()
-            else: st.error("❌ Credenciales incorrectas.")
+        with st.form("login_form"):
+            # Las etiquetas 'autocomplete' le dan la señal al celular/PC para guardar los datos
+            u_in = st.text_input("Usuario", autocomplete="username")
+            p_in = st.text_input("Contraseña", type="password", autocomplete="current-password")
+            ingresar = st.form_submit_button("Acceder", type="primary", use_container_width=True)
+            
+            if ingresar:
+                match = df_usuarios[(df_usuarios['Usuario'] == u_in) & (df_usuarios['Password'] == p_in)]
+                if not match.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user = match.iloc[0]['Usuario']
+                    st.session_state.role = match.iloc[0]['Rol']
+                    st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
+                    st.session_state.alertas_vistas = False
+                    cookies.set('nexa_user_cookie', match.iloc[0]['Usuario'])
+                    st.rerun()
+                else: 
+                    st.error("❌ Credenciales incorrectas.")
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN (Funciones puras)
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN 
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
@@ -566,6 +569,7 @@ elif menu == "📂 Ex-Clientes":
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
                 if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
+                    global df_ex_clientes
                     df_ex_clientes = df_ex_clientes.drop(idx)
                     save_df(df_ex_clientes, "ExClientes")
                     st.rerun()
@@ -600,6 +604,7 @@ elif menu == "📦 Inventario YT":
                         st.rerun()
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
+                global df_inv
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
@@ -641,6 +646,7 @@ elif menu == "📦 Inventario YT":
                     edi()
             with c2:
                 if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
+                    global df_inv
                     df_inv = df_inv.drop(idx)
                     save_df(df_inv, "Inventario")
                     st.rerun()
@@ -689,6 +695,7 @@ elif menu == "👥 Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
+                        global df_usuarios
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
@@ -712,6 +719,7 @@ elif menu == "👥 Vendedores":
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
+                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
                         st.rerun()
