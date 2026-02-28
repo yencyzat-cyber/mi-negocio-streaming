@@ -16,14 +16,13 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "3.3 (Estabilidad y Diseño Premium)"
+VERSION_APP = "3.4 (100% Móvil - Top Header)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
 
 st.set_page_config(page_title="NEXA-Stream", page_icon="🚀", layout="wide", initial_sidebar_state="collapsed")
 
-# Sistema inteligente de Notificaciones Toast
 if 'toast_msg' not in st.session_state:
     st.session_state.toast_msg = None
 
@@ -34,23 +33,25 @@ if st.session_state.toast_msg:
 st.markdown(f"""
     <style>
     .version-corner {{
-        position: fixed; top: 15px; right: 70px; background-color: rgba(0, 210, 106, 0.2);
-        color: #00D26A; padding: 4px 10px; border-radius: 12px; font-size: 12px;
+        position: fixed; bottom: 15px; right: 15px; background-color: rgba(0, 210, 106, 0.2);
+        color: #00D26A; padding: 4px 10px; border-radius: 12px; font-size: 10px;
         font-weight: bold; z-index: 999999; pointer-events: none; border: 1px solid #00D26A;
-        box-shadow: 0 0 10px rgba(0, 210, 106, 0.5);
     }}
     </style>
     <div class="version-corner">v{VERSION_APP}</div>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 2: CSS MÓVIL, TARJETAS FLOTANTES Y ESTILOS PREMIUM
+# BLOQUE 2: CSS MÓVIL Y ESTILOS
 # ==============================================================================
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     
-    /* Efecto Hover en las Tarjetas (Containers) */
+    /* ELIMINAR BARRA LATERAL POR COMPLETO */
+    [data-testid="collapsedControl"] { display: none !important; }
+    section[data-testid="stSidebar"] { display: none !important; }
+    
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 16px !important;
         border: 1px solid #2A2F3D !important;
@@ -63,7 +64,6 @@ st.markdown("""
         border-color: #00D26A !important;
     }
     
-    /* Hero Metrics (Dashboard) */
     div[data-testid="metric-container"] { 
         background: linear-gradient(145deg, #1A1E2C, #131620) !important; 
         border: 1px solid #2A2F3D !important; 
@@ -72,7 +72,6 @@ st.markdown("""
         border-radius: 16px !important; 
     }
     
-    /* Etiquetas (Badges) estilo Apple */
     .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-right: 8px; display: inline-block; margin-bottom: 5px;}
     .badge-netflix { background-color: rgba(229, 9, 20, 0.15); color: #E50914; border: 1px solid #E50914; }
     .badge-youtube { background-color: rgba(255, 0, 0, 0.15); color: #FF4444; border: 1px solid #FF4444; }
@@ -83,13 +82,11 @@ st.markdown("""
     .badge-orange { background-color: rgba(255, 152, 0, 0.15); color: #FF9800; border: 1px solid #FF9800;}
     .badge-red { background-color: rgba(244, 67, 54, 0.15); color: #F44336; border: 1px solid #F44336;}
     
-    /* Botones más curvos */
     .stButton>button, .stLinkButton>a { border-radius: 10px !important; height: 38px !important; padding: 0px !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 100% !important; font-size: 15px !important; font-weight: 600 !important; margin: 0px !important; transition: all 0.2s; }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; }
     .stLinkButton>a:hover { background-color: #20BA59 !important; transform: scale(1.02); }
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div { border-radius: 10px; height: 38px; }
     
-    /* Distribución de botones */
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: nowrap !important; gap: 6px !important; }
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] { width: 25% !important; min-width: 0 !important; flex: 1 1 0px !important; }
     .element-container:has(.fila-alerta) + .element-container > div[data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: nowrap !important; gap: 6px !important; }
@@ -207,7 +204,7 @@ def formatear_mes_anio(yyyy_mm):
     return f"{MESES_NOMBRES[m]} {y}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN Y AUTO-GUARDADO
+# BLOQUE 4: SISTEMA DE LOGIN 
 # ==============================================================================
 cookies = CookieController()
 usuario_guardado = cookies.get('nexa_user_cookie')
@@ -488,9 +485,27 @@ def editar_vendedor_popup(idx, row):
         st.rerun()
 
 # ==============================================================================
-# BLOQUE 6: MENÚ FUTURISTA NEÓN (SUPERIOR) & SIDEBAR PERFIL
+# BLOQUE 6: TOP HEADER Y NAVEGACIÓN 
 # ==============================================================================
-# 1. El Menú Flotante Superior (Horizontal)
+
+# Encabezado Fijo Superior (Top Bar)
+c_logo, c_perfil, c_salir = st.columns([2, 1.5, 0.5], vertical_alignment="center")
+with c_logo:
+    st.markdown('<h2 style="color:#00D26A; margin:0; padding:0;">🚀 NEXA<span style="color:white;">-Stream</span></h2>', unsafe_allow_html=True)
+with c_perfil:
+    st.markdown(f'<div style="text-align:right; color:#aaa; margin-top:10px;">👤 <b>{st.session_state.user}</b> | {st.session_state.role}</div>', unsafe_allow_html=True)
+with c_salir:
+    if st.button("🚪 Salir", use_container_width=True):
+        cookies.remove('nexa_user_cookie') 
+        st.session_state.logged_in = False
+        st.rerun()
+
+if st.session_state.role != "Admin" and st.session_state.acceso_yt == "No":
+    with st.expander("🔓 Desbloquea la Bóveda de YouTube"):
+        msj_up_menu = f"Hola Admin, soy {st.session_state.user}. Quiero adquirir el acceso a la bóveda de YouTube por S/ 5.00."
+        st.link_button("📲 Solicitar Activación al Administrador", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up_menu)}", use_container_width=True)
+
+# El Menú Flotante Neón
 if st.session_state.role == "Admin":
     opciones_menu = ["Ventas", "Dashboard", "Inventario", "Papelera", "Vendedores", "Ajustes"]
     iconos_menu = ["cart-check-fill", "bar-chart-fill", "youtube", "trash3-fill", "people-fill", "gear-fill"]
@@ -517,36 +532,6 @@ menu = option_menu(
         },
     }
 )
-
-# 2. La Barra Lateral limpia solo para perfil de usuario
-with st.sidebar:
-    st.markdown("""
-        <div style="text-align: center; padding-bottom: 20px;">
-            <h1 style="color: #00D26A; margin-bottom:0; text-shadow: 0 0 10px rgba(0,210,106,0.3);">NEXA</h1>
-            <h3 style="margin-top:0; color: white; letter-spacing: 2px;">STREAM</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        st.markdown(f"""
-        <div style="text-align: center;">
-            <div style="font-size: 40px; margin-bottom: -10px;">🧑‍🚀</div>
-            <h3 style="margin-bottom: 0px; color: #00D26A;">{st.session_state.user}</h3>
-            <p style="color: #aaa; font-size: 14px;">Nivel: <b>{st.session_state.role}</b></p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    if st.session_state.role != "Admin" and st.session_state.acceso_yt == "No":
-        st.info("🔓 **Desbloquea Bóveda**\nAccede a YouTube Automático.")
-        msj_up_menu = f"Hola Admin, soy {st.session_state.user}. Quiero adquirir el acceso a la bóveda de YouTube por S/ 5.00."
-        st.link_button("📲 Activar Nivel", f"https://wa.me/{NUMERO_ADMIN}?text={quote(msj_up_menu)}", use_container_width=True)
-        
-    st.write("")
-    st.write("")
-    if st.button("🚪 Cerrar Sistema", use_container_width=True):
-        cookies.remove('nexa_user_cookie') 
-        st.session_state.logged_in = False
-        st.rerun()
 
 # ==============================================================================
 # VISTAS PRINCIPALES
@@ -686,7 +671,6 @@ elif menu == "Dashboard":
             total_ganancia = total_ingresos - total_costos
             total_clientes = len(df_dash)
             
-            # HERO METRICS
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("👥 Clientes", f"{total_clientes}")
             c2.metric("💰 Ventas Brutas", f"S/ {total_ingresos:.2f}")
