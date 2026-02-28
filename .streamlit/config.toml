@@ -1,0 +1,15 @@
+[theme]
+# El color principal de los botones (Verde Neón Tecnológico)
+primaryColor = "#00D26A"
+
+# El fondo general de la aplicación (Un azul oscuro profundo, casi negro)
+backgroundColor = "#0B0F19"
+
+# El fondo del menú lateral izquierdo y las cajas (Gris oscuro elegante)
+secondaryBackgroundColor = "#1A1E2C"
+
+# El color de las letras (Blanco puro para resaltar)
+textColor = "#FFFFFF"
+
+# Tipo de letra moderna y limpia
+font = "sans serif"
