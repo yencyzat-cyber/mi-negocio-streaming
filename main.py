@@ -15,7 +15,7 @@ from streamlit_cookies_controller import CookieController
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.9 (Estabilidad Total)"
+VERSION_APP = "2.9"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
