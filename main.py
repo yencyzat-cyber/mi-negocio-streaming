@@ -10,11 +10,12 @@ import altair as alt
 from urllib.parse import quote
 import gspread
 from google.oauth2.service_account import Credentials
+from streamlit_cookies_controller import CookieController
 
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "2.5 (Google DB - Limpio y Final)"
+VERSION_APP = "2.6 (Auto-Login Activo)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -160,8 +161,11 @@ def formatear_mes_anio(yyyy_mm):
     return f"{MESES_NOMBRES[m]} {y}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN Y SESIÓN
+# BLOQUE 4: SISTEMA DE LOGIN Y COOKIES (AUTO-LOGIN)
 # ==============================================================================
+cookies = CookieController()
+usuario_guardado = cookies.get('nexa_user_cookie')
+
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = ""
@@ -175,6 +179,17 @@ if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = N
 if 'nuevo_vend_nom' not in st.session_state: st.session_state.nuevo_vend_nom = None
 if 'nuevo_vend_tel' not in st.session_state: st.session_state.nuevo_vend_tel = None
 
+# Intento de Auto-Login si existe la cookie
+if not st.session_state.logged_in and usuario_guardado:
+    match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
+    if not match.empty:
+        st.session_state.logged_in = True
+        st.session_state.user = match.iloc[0]['Usuario']
+        st.session_state.role = match.iloc[0]['Rol']
+        st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
+        st.session_state.alertas_vistas = False
+
+# Pantalla de Login Manual
 if not st.session_state.logged_in:
     st.title("🔐 Portal NEXA-Stream")
     with st.container(border=True):
@@ -189,6 +204,8 @@ if not st.session_state.logged_in:
                 st.session_state.role = match.iloc[0]['Rol']
                 st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
                 st.session_state.alertas_vistas = False
+                # Crear la cookie de sesión (se destruye al cerrar la pestaña)
+                cookies.set('nexa_user_cookie', match.iloc[0]['Usuario'])
                 st.rerun()
             else: st.error("❌ Credenciales incorrectas.")
     st.stop()
@@ -396,6 +413,7 @@ with st.sidebar:
     menu = st.radio("Navegación", menu_opciones, label_visibility="collapsed")
     st.divider()
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        cookies.remove('nexa_user_cookie') # Destruir la cookie al salir manual
         st.session_state.logged_in = False
         st.rerun()
 
@@ -548,6 +566,7 @@ elif menu == "📂 Ex-Clientes":
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
                 if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
+                    global df_ex_clientes
                     df_ex_clientes = df_ex_clientes.drop(idx)
                     save_df(df_ex_clientes, "ExClientes")
                     st.rerun()
@@ -582,6 +601,7 @@ elif menu == "📦 Inventario YT":
                         st.rerun()
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
+                global df_inv
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
@@ -623,6 +643,7 @@ elif menu == "📦 Inventario YT":
                     edi()
             with c2:
                 if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
+                    global df_inv
                     df_inv = df_inv.drop(idx)
                     save_df(df_inv, "Inventario")
                     st.rerun()
@@ -671,6 +692,7 @@ elif menu == "👥 Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
+                        global df_usuarios
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
@@ -694,6 +716,7 @@ elif menu == "👥 Vendedores":
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
+                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
                         st.rerun()
