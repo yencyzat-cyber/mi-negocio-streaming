@@ -16,7 +16,7 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "3.0 (Master UX Premium)"
+VERSION_APP = "3.1 (UX Premium & Fix Definitivo)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -206,7 +206,7 @@ def formatear_mes_anio(yyyy_mm):
     return f"{MESES_NOMBRES[m]} {y}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN 
+# BLOQUE 4: SISTEMA DE LOGIN Y AUTO-GUARDADO
 # ==============================================================================
 cookies = CookieController()
 usuario_guardado = cookies.get('nexa_user_cookie')
@@ -449,7 +449,7 @@ def nueva_venta_popup():
         st.rerun()
 
 # ==============================================================================
-# BLOQUE 6: NAVEGACIÓN LATERAL PREMIUM (Option Menu)
+# BLOQUE 6: NAVEGACIÓN LATERAL PREMIUM
 # ==============================================================================
 with st.sidebar:
     st.markdown("""
@@ -465,7 +465,6 @@ with st.sidebar:
         
     st.divider()
     
-    # Menú Profesional
     if st.session_state.role == "Admin":
         opciones_menu = ["Panel de Ventas", "Dashboard", "Ex-Clientes", "Inventario YT", "Vendedores", "Configuración"]
         iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill", "youtube", "people-fill", "gear-fill"]
@@ -530,7 +529,6 @@ if menu == "Panel de Ventas":
             st.session_state.alertas_vistas = False
             st.rerun()
             
-    # Sistema de Pestañas Visuales (Radio Horizontal)
     st.write("")
     filtro_est = st.radio("Estado de Cuenta:", ["🌎 Todas", "🟢 Activas", "🟠 Por Vencer", "🔴 Vencidas"], horizontal=True, label_visibility="collapsed")
     
@@ -554,7 +552,6 @@ if menu == "Panel de Ventas":
         for idx, row in df_mostrar.sort_values(by="Vencimiento").iterrows():
             d = (row['Vencimiento'] - hoy).days
             
-            # Lógica de colores Apple-Style
             if d <= 0: estado_txt, badge_col = "Vencido", "badge-red"
             elif d <= 3: estado_txt, badge_col = f"Vence en {d} d.", "badge-orange"
             else: estado_txt, badge_col = "Activo", "badge-green"
@@ -567,7 +564,6 @@ if menu == "Panel de Ventas":
             texto_wa = texto_base.replace("{cliente}", str(row['Cliente'])).replace("{producto}", str(row['Producto'])).replace("{vencimiento}", str(row['Vencimiento']))
             wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
             
-            # TARJETA DE CLIENTE (CARD)
             with st.container(border=True):
                 vendedor_badge = f" • 🧑‍💼 {row['Vendedor']}" if st.session_state.role == "Admin" else ""
                 st.markdown(f"""
@@ -638,7 +634,6 @@ elif menu == "Dashboard":
             total_ganancia = total_ingresos - total_costos
             total_clientes = len(df_dash)
             
-            # HERO METRICS
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("👥 Clientes Activos", f"{total_clientes}")
             c2.metric("💰 Ventas Brutas", f"S/ {total_ingresos:.2f}")
@@ -666,7 +661,6 @@ elif menu == "Ex-Clientes":
                 c1, c2 = st.columns([4, 1])
                 c1.write(f"🚫 **{row['Cliente']}** ({row['Producto']}) - Tel: {row['WhatsApp']}")
                 if c2.button("🗑️ Borrar Definitivo", key=f"ex_{idx}", use_container_width=True):
-                    global df_ex_clientes
                     df_ex_clientes = df_ex_clientes.drop(idx)
                     save_df(df_ex_clientes, "ExClientes")
                     st.session_state.toast_msg = "✅ Borrado permanentemente."
@@ -702,7 +696,6 @@ elif menu == "Inventario YT":
                         st.rerun()
             st.write("---")
             if st.button("✅ Confirmar y Guardar en Inventario", type="primary", use_container_width=True):
-                global df_inv
                 nuevos_df = pd.DataFrame([[acc['Correo'], acc['Pass'], 0, "Nadie"] for acc in st.session_state.temp_emails], columns=df_inv.columns)
                 df_inv = pd.concat([df_inv, nuevos_df], ignore_index=True)
                 save_df(df_inv, "Inventario")
@@ -744,8 +737,7 @@ elif menu == "Inventario YT":
                             st.rerun()
                     edi()
             with c2:
-                if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True): 
-                    global df_inv
+                if st.button("🗑️ Borrar", key=f"di_{idx}", use_container_width=True):
                     df_inv = df_inv.drop(idx)
                     save_df(df_inv, "Inventario")
                     st.session_state.toast_msg = "🗑️ Borrado del inventario."
@@ -796,7 +788,6 @@ elif menu == "Vendedores":
                         pwd_generada = generar_password_aleatoria()
                         tel_limpio = limpiar_whatsapp(nuevo_tel)
                         acceso = "Si" if dar_acceso_yt else "No"
-                        global df_usuarios
                         nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", tel_limpio, acceso]], columns=["Usuario", "Password", "Rol", "Telefono", "Acceso_YT"])
                         df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True)
                         save_df(df_usuarios, "Usuarios")
@@ -821,7 +812,6 @@ elif menu == "Vendedores":
                     if st.button("📝 Editar", key=f"eu_{idx}", use_container_width=True): editar_vendedor_popup(idx, row)
                 with c_del:
                     if st.button("🗑️ Borrar", key=f"du_{idx}", use_container_width=True):
-                        global df_usuarios
                         df_usuarios = df_usuarios.drop(idx)
                         save_df(df_usuarios, "Usuarios")
                         st.session_state.toast_msg = "🗑️ Vendedor eliminado."
