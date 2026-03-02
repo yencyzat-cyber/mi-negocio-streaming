@@ -16,7 +16,7 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "3.6 (UX Acordeones & Súper Dashboard)"
+VERSION_APP = "3.7 (UX Apple Pill Menu)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -201,7 +201,7 @@ def formatear_mes_anio(yyyy_mm):
     return f"{MESES[m]} {y}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN 
+# BLOQUE 4: SISTEMA DE LOGIN Y AUTO-GUARDADO
 # ==============================================================================
 cookies = CookieController()
 usuario_guardado = cookies.get('nexa_user_cookie')
@@ -261,7 +261,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN (Pop-Ups)
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
@@ -395,10 +395,12 @@ def nueva_venta_popup():
         st.rerun()
 
 # ==============================================================================
-# BLOQUE 6: ENCABEZADO Y MENÚ
+# BLOQUE 6: ENCABEZADO 100% MÓVIL Y MENÚ PÍLDORA (ESTILO iOS)
 # ==============================================================================
+
+# Encabezado súper limpio
 st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0px 15px 0px; margin-bottom: 10px; border-bottom: 1px solid #2A2F3D;">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0px 15px 0px; margin-bottom: 5px;">
         <h2 style="color:#00D26A; margin:0; padding:0; line-height: 1;">🚀 NEXA<span style="color:white; font-size: 18px;">-Stream</span></h2>
         <div style="text-align:right; color:#aaa; font-size: 13px; line-height: 1.2;">
             👤 <b>{st.session_state.user}</b> <br> <span style="font-size: 11px;">{st.session_state.role}</span>
@@ -406,11 +408,12 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
+# EL NUEVO MENÚ PÍLDORA FLOTANTE (ESTILO APPLE)
 if st.session_state.role == "Admin":
-    opciones_menu = ["Ventas", "Dashboard", "Inventario", "Papelera", "Equipo", "Ajustes", "Salir"]
-    iconos_menu = ["cart-check-fill", "bar-chart-fill", "youtube", "trash3-fill", "people-fill", "gear-fill", "box-arrow-right"]
+    opciones_menu = ["Ventas", "Métricas", "Inventario", "Equipo", "Ajustes", "Salir"]
+    iconos_menu = ["cart-check-fill", "bar-chart-fill", "youtube", "people-fill", "gear-fill", "box-arrow-right"]
 else:
-    opciones_menu = ["Ventas", "Dashboard", "Papelera", "Salir"]
+    opciones_menu = ["Ventas", "Métricas", "Papelera", "Salir"]
     iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill", "box-arrow-right"]
 
 menu = option_menu(
@@ -420,10 +423,35 @@ menu = option_menu(
     default_index=0,
     orientation="horizontal",
     styles={
-        "container": {"padding": "5px", "background-color": "#131620", "border": "1px solid #2A2F3D", "border-radius": "12px", "margin-bottom": "20px"},
-        "icon": {"color": "#00D26A", "font-size": "14px"},
-        "nav-link": {"font-size": "12px", "text-align": "center", "margin":"2px", "padding": "8px 5px", "--hover-color": "#1A1E2C", "border-radius": "8px"},
-        "nav-link-selected": {"background-color": "rgba(0, 210, 106, 0.15)", "color": "#00D26A", "font-weight": "bold", "border": "1px solid #00D26A"},
+        "container": {
+            "padding": "6px", 
+            "background-color": "rgba(26, 30, 44, 0.6)", 
+            "border": "1px solid #2A2F3D", 
+            "border-radius": "50px", # Borde píldora 100% redondeado
+            "margin-bottom": "25px",
+            "box-shadow": "0 8px 20px rgba(0,0,0,0.4)"
+        },
+        "icon": {
+            "font-size": "15px", 
+            "transition": "all 0.3s ease-in-out"
+        },
+        "nav-link": {
+            "font-size": "12px", 
+            "text-align": "center", 
+            "margin": "0px 2px", 
+            "padding": "8px 10px", 
+            "--hover-color": "rgba(255,255,255,0.05)", 
+            "border-radius": "50px", # Efecto de píldora individual al pasar el mouse
+            "color": "#7A8295", # Texto apagado para opciones inactivas
+            "transition": "all 0.4s cubic-bezier(0.25, 1, 0.5, 1)" # Animación de deslizamiento fluido iOS
+        },
+        "nav-link-selected": {
+            "background-color": "#00D26A", 
+            "color": "#0B0F19", # Texto oscuro sobre neón brilla muchísimo más (Premium)
+            "font-weight": "800", 
+            "border-radius": "50px",
+            "box-shadow": "0 0 15px rgba(0, 210, 106, 0.4)" 
+        },
     }
 )
 
@@ -440,7 +468,7 @@ if menu == "Ventas":
     if st.session_state.role == "Admin":
         cupos_disponibles = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
         if cupos_disponibles <= 2:
-            st.error(f"🚨 **¡INVENTARIO CRÍTICO!** Solo quedan **{cupos_disponibles}** cupos automáticos.")
+            st.error(f"🚨 **¡ALERTA INVENTARIO!** Quedan **{cupos_disponibles}** cupos de YouTube automáticos.")
 
     if st.session_state.role == "Admin":
         tipo_filtro = st.selectbox("👥 Filtro Vendedores:", ["🌎 Todos", "👥 Equipo", "👑 Mi Cuenta", "🎯 Buscar..."], label_visibility="collapsed")
@@ -467,7 +495,6 @@ if menu == "Ventas":
             st.session_state.alertas_vistas = False
             st.rerun()
             
-    # FILTROS OCULTOS (Alternativa 3)
     with st.expander("🔍 Mostrar Filtros Avanzados", expanded=False):
         filtro_est = st.radio("Estado:", ["🌎 Todas", "🟢 Activas", "🟠 Por Vencer", "🔴 Vencidas"], horizontal=True)
         cf1, cf2 = st.columns(2)
@@ -485,7 +512,6 @@ if menu == "Ventas":
 
     st.write("---")
 
-    # DISEÑO ACORDEÓN (Alternativa 2)
     if not df_mostrar.empty:
         for idx, row in df_mostrar.sort_values(by="Vencimiento").iterrows():
             d = (row['Vencimiento'] - hoy).days
@@ -500,11 +526,9 @@ if menu == "Ventas":
             texto_wa = texto_base.replace("{cliente}", str(row['Cliente'])).replace("{producto}", str(row['Producto'])).replace("{vencimiento}", str(row['Vencimiento']))
             wa_url = f"https://wa.me/{row['WhatsApp']}?text={quote(texto_wa)}"
             
-            # EL ACORDEÓN CERRADO MUESTRA ESTO:
             titulo_acordeon = f"{est_emj} {row['Cliente']} | 📺 {row['Producto']}"
             
             with st.expander(titulo_acordeon):
-                # CONTENIDO INTERNO AL ABRIRLO
                 vendedor_badge = f" • 🧑‍🚀 {row['Vendedor']}" if st.session_state.role == "Admin" else ""
                 st.markdown(f"""
                 <div>
@@ -533,7 +557,7 @@ if menu == "Ventas":
     else: 
         st.info("No se encontraron clientes.")
 
-elif menu == "Dashboard":
+elif menu == "Métricas":
     if st.session_state.role == "Admin": 
         tipo_filtro_dash = st.selectbox("Filtro Vendedores:", ["🌎 Todos", "👥 Equipo", "👑 Mi Cuenta"], label_visibility="collapsed")
         if tipo_filtro_dash == "🌎 Todos": df_dash_base = df_ventas.copy()
@@ -555,7 +579,6 @@ elif menu == "Dashboard":
         if periodo_sel != "Histórico Global": df_dash = df_dash_base[df_dash_base['Periodo'] == periodo_sel]
         else: df_dash = df_dash_base
         
-        # BOTÓN DE DESCARGA EXCEL (CSV)
         with c_desc:
             csv_data = df_dash.to_csv(index=False).encode('utf-8')
             st.download_button(label="📥 Exportar Excel", data=csv_data, file_name='reporte_nexa.csv', mime='text/csv', use_container_width=True)
@@ -574,7 +597,6 @@ elif menu == "Dashboard":
             vencidos = len(df_dash[pd.to_datetime(df_dash['Vencimiento']).dt.date <= hoy])
             por_vencer = len(df_dash[(pd.to_datetime(df_dash['Vencimiento']).dt.date <= hoy + timedelta(days=3)) & (pd.to_datetime(df_dash['Vencimiento']).dt.date > hoy)])
             
-            # LAS NUEVAS TARJETAS DE COLORES (KPIs)
             col1, col2 = st.columns(2)
             col3, col4 = st.columns(2)
             
@@ -589,7 +611,6 @@ elif menu == "Dashboard":
             
             st.write("---")
             
-            # GRÁFICOS EN PARALELO
             st.subheader("📊 Análisis Gráfico")
             cg1, cg2 = st.columns(2)
             
@@ -629,7 +650,6 @@ elif menu == "Papelera":
                     st.rerun()
 
 elif menu == "Inventario":
-    # Formulario Oculto (Acordeón) para no saturar la pantalla móvil
     with st.expander("➕ CREAR NUEVAS CUENTAS (BÓVEDA)", expanded=False):
         c_auto, c_man = st.tabs(["⚡ Generador con IA", "✏️ Ingreso Manual"])
         
