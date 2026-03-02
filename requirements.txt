@@ -2,3 +2,5 @@ gspread
 google-auth
 streamlit-cookies-controller
 streamlit-option-menu
+openpyxl
+xlsxwriter
