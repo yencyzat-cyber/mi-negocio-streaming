@@ -16,7 +16,7 @@ import io
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO
 # ==============================================================================
-VERSION_APP = "4.5 (Pills UI, Custom Payments & Fixes)"
+VERSION_APP = "4.5 (Pure Pill UI & Custom Payments)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -41,13 +41,13 @@ if st.session_state.toast_msg:
 
 st.markdown(f"""
     <style>
-    .version-corner {{ position: fixed; bottom: 15px; right: 15px; background-color: rgba(0, 210, 106, 0.1); color: #00D26A; padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; z-index: 999999; pointer-events: none; border: 1px solid rgba(0, 210, 106, 0.4); }}
+    .version-corner {{ position: fixed; bottom: 15px; right: 15px; background-color: rgba(0, 210, 106, 0.1); color: #00D26A; padding: 4px 10px; border-radius: 50px; font-size: 10px; font-weight: bold; z-index: 999999; pointer-events: none; border: 1px solid rgba(0, 210, 106, 0.4); }}
     </style>
     <div class="version-corner">v{VERSION_APP}</div>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 2: CSS ADAPTATIVO
+# BLOQUE 2: CSS ADAPTATIVO Y EFECTO PÍLDORA (iOS)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -55,13 +55,20 @@ st.markdown("""
     [data-testid="collapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
+    /* EFECTO PASTILLA BUBBLY PARA LOS CONTENEDORES Y ACORDEONES */
     div[data-testid="stExpander"], div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 12px !important; border: 1px solid rgba(128,128,128,0.2) !important; background-color: var(--secondary-background-color) !important; margin-bottom: 10px; transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border-radius: 28px !important; /* Curvatura extrema tipo pastilla */
+        border: 1px solid rgba(128,128,128,0.2) !important; 
+        background-color: var(--secondary-background-color) !important; 
+        margin-bottom: 12px; 
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        padding: 5px;
     }
     div[data-testid="stExpander"] summary p { font-weight: bold !important; font-size: 15px !important; }
-    div[data-testid="stVerticalBlockBorderWrapper"]:hover { transform: translateY(-2px); border-color: #00D26A !important; }
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 210, 106, 0.15) !important; border-color: #00D26A !important; }
     
-    .kpi-card { padding: 20px; border-radius: 15px; color: white; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    /* DASHBOARD KPI CARDS */
+    .kpi-card { padding: 20px; border-radius: 28px; color: white; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     .kpi-blue { background: linear-gradient(135deg, #0052D4, #007BFF); }
     .kpi-orange { background: linear-gradient(135deg, #C85A17, #FF8C00); }
     .kpi-red { background: linear-gradient(135deg, #900C3F, #DC3545); }
@@ -69,7 +76,8 @@ st.markdown("""
     .kpi-title { font-size: 14px; opacity: 0.9; margin-bottom: 5px; }
     .kpi-value { font-size: 28px; font-weight: bold; margin: 0; }
     
-    .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-right: 8px; display: inline-block; margin-bottom: 5px;}
+    /* ETIQUETAS */
+    .badge { padding: 5px 14px; border-radius: 50px; font-size: 12px; font-weight: bold; margin-right: 8px; display: inline-block; margin-bottom: 5px;}
     .badge-netflix { background-color: rgba(229, 9, 20, 0.15); color: #E50914; border: 1px solid rgba(229, 9, 20, 0.3); }
     .badge-youtube { background-color: rgba(255, 0, 0, 0.15); color: #FF4444; border: 1px solid rgba(255, 0, 0, 0.3); }
     .badge-spotify { background-color: rgba(29, 185, 84, 0.15); color: #1DB954; border: 1px solid rgba(29, 185, 84, 0.3); }
@@ -79,17 +87,29 @@ st.markdown("""
     .badge-orange { background-color: rgba(255, 152, 0, 0.15); color: #FF9800; border: 1px solid rgba(255, 152, 0, 0.3);}
     .badge-red { background-color: rgba(244, 67, 54, 0.15); color: #F44336; border: 1px solid rgba(244, 67, 54, 0.3);}
     
-    .stButton>button, .stLinkButton>a { border-radius: 10px !important; height: 38px !important; padding: 0px !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 100% !important; font-size: 15px !important; font-weight: 600 !important; margin: 0px !important; transition: all 0.2s; }
+    /* BOTONES 100% PÍLDORA */
+    .stButton>button, .stLinkButton>a { 
+        border-radius: 50px !important; /* Forma de pastilla perfecta */
+        height: 42px !important; 
+        padding: 0px 20px !important; 
+        display: flex !important; align-items: center !important; justify-content: center !important; 
+        width: 100% !important; font-size: 15px !important; font-weight: 600 !important; margin: 0px !important; transition: all 0.2s; 
+    }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div, .stTextArea>div>div>textarea { border-radius: 10px; }
     
+    /* CAJAS DE TEXTO REDONDEADAS */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div, .stTextArea>div>div>textarea { 
+        border-radius: 18px !important; 
+    }
+    
+    /* ALINEACIÓN DE BOTONES */
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important; }
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] { min-width: 45% !important; flex: 1 1 auto !important; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS Y AUTO-MIGRACIÓN
+# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS
 # ==============================================================================
 @st.cache_resource
 def init_gsheets():
@@ -130,7 +150,7 @@ def save_df(df, ws_name):
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
     get_sheet_records.clear() 
 
-# --- CARGAR TABLAS ---
+# --- CARGAR Y MIGRAR TABLAS ---
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio", "Notas"]
 df_ventas = load_df("Ventas", cols_ventas)
 migr_ventas = False
@@ -172,8 +192,7 @@ TXT_V = "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO.\n\nPara reacti
 
 for col in cols_usuarios:
     if col not in df_usuarios.columns: 
-        df_usuarios[col] = ""
-        migr_usr = True
+        df_usuarios[col] = ""; migr_usr = True
 
 for idx, row in df_usuarios.iterrows():
     modificado = False
@@ -186,9 +205,8 @@ for idx, row in df_usuarios.iterrows():
     
     dp_actual = str(row.get('Datos_Pago', '')).strip()
     if not dp_actual.startswith('['): 
-        json_inicial = json.dumps([{"Id": 1, "Titular": "Admin", "Activo": True, "Metodo": "Yape", "Cuenta": NUMERO_ADMIN}])
-        df_usuarios.at[idx, 'Datos_Pago'] = json_inicial
-        modificado = True
+        json_inicial = json.dumps([{"Id": 1, "Titular": row.get('Usuario', 'Admin'), "Activo": True, "Metodo": "Yape", "Cuenta": str(row.get('Telefono', NUMERO_ADMIN))}])
+        df_usuarios.at[idx, 'Datos_Pago'] = json_inicial; modificado = True
         
     if modificado: migr_usr = True
 
@@ -212,17 +230,11 @@ def registrar_auditoria(accion, detalle):
     df_auditoria = pd.concat([df_auditoria, nuevo], ignore_index=True)
     save_df(df_auditoria, "Auditoria")
 
-def generar_password_aleatoria():
-    return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(8))
-
-def generar_usuario(nombre):
-    base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower())
-    return f"{base}{random.randint(100, 999)}"
-
+def generar_password_aleatoria(): return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(8))
+def generar_usuario(nombre): base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower()); return f"{base}{random.randint(100, 999)}"
 def limpiar_whatsapp(numero):
     solo_numeros = re.sub(r'\D', '', str(numero))
-    if len(solo_numeros) == 9: return f"51{solo_numeros}"
-    return solo_numeros
+    return f"51{solo_numeros}" if len(solo_numeros) == 9 else solo_numeros
 
 def formatear_mes_anio(yyyy_mm):
     MESES = {'01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr', '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic'}
@@ -232,10 +244,9 @@ def formatear_mes_anio(yyyy_mm):
 def procesar_plantilla(tipo, row_venta, mi_perfil):
     try:
         lista_pagos = json.loads(mi_perfil.get('Datos_Pago', '[]'))
-        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']} ({p['Titular']})" for p in lista_pagos if p.get('Activo', False)]
+        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']} (A nombre de: {p['Titular']})" for p in lista_pagos if p.get('Activo', False)]
         str_pagos = "\n".join(pagos_activos) if pagos_activos else "Consultar medio de pago."
-    except:
-        str_pagos = "Consultar medio de pago."
+    except: str_pagos = "Consultar medio de pago."
 
     if tipo == "Bienvenida": base = mi_perfil.get('P_Bienvenida', TXT_B)
     elif tipo == "Recordatorio": base = mi_perfil.get('P_Rec', TXT_R)
@@ -248,10 +259,8 @@ def procesar_plantilla(tipo, row_venta, mi_perfil):
 
 def generar_backup_excel():
     output = io.BytesIO()
-    df_v = df_ventas.astype(str)
-    df_i = df_inv.astype(str)
-    df_u = df_usuarios.astype(str)
-    df_a = df_auditoria.astype(str)
+    df_v = df_ventas.astype(str); df_i = df_inv.astype(str)
+    df_u = df_usuarios.astype(str); df_a = df_auditoria.astype(str)
     df_e = df_ex_clientes.astype(str)
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -265,7 +274,44 @@ def generar_backup_excel():
     return output.getvalue()
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN GLOBALES (Evitan el Error de Sintaxis)
+# BLOQUE 4: SISTEMA DE LOGIN 
+# ==============================================================================
+cookies = CookieController()
+usuario_guardado = cookies.get('nexa_user_cookie')
+
+if not st.session_state.logged_in and usuario_guardado:
+    match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
+    if not match.empty:
+        st.session_state.logged_in = True
+        st.session_state.user = match.iloc[0]['Usuario']
+        st.session_state.role = match.iloc[0]['Rol']
+        st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
+
+if not st.session_state.logged_in:
+    st.markdown("""<div style="text-align: center; margin-top: 50px;">
+        <h1 style="color: #00D26A; font-size: 50px; margin-bottom:0;">🚀 NEXA</h1>
+        <h3 style="margin-top:0; color:var(--text-color); letter-spacing: 4px;">STREAM</h3>
+    </div>""", unsafe_allow_html=True)
+    c_log1, c_log2, c_log3 = st.columns([1,2,1])
+    with c_log2:
+        with st.container(border=True):
+            with st.form("login_form"):
+                u_in = st.text_input("Usuario")
+                p_in = st.text_input("Contraseña", type="password")
+                ingresar = st.form_submit_button("Acceder", type="primary", use_container_width=True)
+                if ingresar:
+                    match = df_usuarios[(df_usuarios['Usuario'] == u_in) & (df_usuarios['Password'] == p_in)]
+                    if not match.empty:
+                        st.session_state.logged_in = True
+                        st.session_state.user = match.iloc[0]['Usuario']; st.session_state.role = match.iloc[0]['Rol']
+                        cookies.set('nexa_user_cookie', u_in); registrar_auditoria("Login", "Ingresó"); st.rerun()
+                    else: st.error("❌ Credenciales incorrectas.")
+    st.stop()
+
+mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
+
+# ==============================================================================
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN GLOBALES (CERO ERRORES SYNTAX)
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy, perfil):
@@ -308,6 +354,7 @@ def renovar_venta_popup(idx, row):
     
     tipo_cta = st.radio("Credenciales:", ["Mantener misma cuenta", "Asignar cuenta nueva"], horizontal=True)
     mv, pv = row['Correo'], row['Pass'] 
+    
     usa_boveda = False
     if not df_plat.empty and row['Producto'] in df_plat['Nombre'].values:
         usa_boveda = df_plat.loc[df_plat['Nombre'] == row['Producto'], 'Usa_Boveda'].values[0] == "Si"
@@ -479,61 +526,56 @@ def nuevo_pago_popup(mis_pagos_actuales):
             st.warning("Completa el nombre del método y el número.")
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN Y MENU PÍLDORA
+# BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA (ESTILO iOS PURO)
 # ==============================================================================
-cookies = CookieController()
-usuario_guardado = cookies.get('nexa_user_cookie')
-
-if not st.session_state.logged_in and usuario_guardado:
-    match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
-    if not match.empty:
-        st.session_state.logged_in = True
-        st.session_state.user = match.iloc[0]['Usuario']
-        st.session_state.role = match.iloc[0]['Rol']
-        st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
-
-if not st.session_state.logged_in:
-    st.markdown("""<div style="text-align: center; margin-top: 50px;">
-        <h1 style="color: #00D26A; font-size: 50px; margin-bottom:0;">🚀 NEXA</h1>
-        <h3 style="margin-top:0; color:var(--text-color); letter-spacing: 4px;">STREAM</h3>
-    </div>""", unsafe_allow_html=True)
-    c_log1, c_log2, c_log3 = st.columns([1,2,1])
-    with c_log2:
-        with st.container(border=True):
-            with st.form("login_form"):
-                u_in = st.text_input("Usuario")
-                p_in = st.text_input("Contraseña", type="password")
-                ingresar = st.form_submit_button("Acceder", type="primary", use_container_width=True)
-                if ingresar:
-                    match = df_usuarios[(df_usuarios['Usuario'] == u_in) & (df_usuarios['Password'] == p_in)]
-                    if not match.empty:
-                        st.session_state.logged_in = True
-                        st.session_state.user = match.iloc[0]['Usuario']; st.session_state.role = match.iloc[0]['Rol']
-                        cookies.set('nexa_user_cookie', u_in); registrar_auditoria("Login", "Ingresó"); st.rerun()
-                    else: st.error("❌ Credenciales incorrectas.")
-    st.stop()
-
-mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
 
 cupos_libres = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
 color_salud = "#00D26A" if cupos_libres > 2 else ("#FF9800" if cupos_libres > 0 else "#F44336")
 
-st.markdown(f"""<div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(128,128,128,0.2);">
-    <div style="display: flex; align-items: center;">
-        <div style="width: 10px; height: 10px; background-color: {color_salud}; border-radius: 50%; margin-right: 10px; box-shadow: 0 0 8px {color_salud};"></div>
-        <h2 style="color:#00D26A; margin:0;">🚀 NEXA<span style="color:var(--text-color); font-size: 18px;">-Stream</span></h2>
+st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0px 15px 0px; margin-bottom: 10px; border-bottom: 1px solid rgba(128,128,128,0.2);">
+        <div style="display: flex; align-items: center;">
+            <div style="width: 10px; height: 10px; background-color: {color_salud}; border-radius: 50px; margin-right: 10px; box-shadow: 0 0 8px {color_salud}; animation: pulse 2s infinite;"></div>
+            <h2 style="color:#00D26A; margin:0; padding:0; line-height: 1;">🚀 NEXA<span style="color:var(--text-color); font-size: 18px;">-Stream</span></h2>
+        </div>
+        <div style="text-align:right; color:var(--text-color); font-size: 13px; line-height: 1.2; opacity: 0.8;">
+            👤 <b>{st.session_state.user}</b> <br> <span style="font-size: 11px;">{st.session_state.role}</span>
+        </div>
     </div>
-    <div style="text-align:right; font-size: 12px; opacity: 0.8;">👤 <b>{st.session_state.user}</b> <br> {st.session_state.role}</div>
-</div>""", unsafe_allow_html=True)
+    <style>@keyframes pulse {{ 0% {{opacity: 1; transform: scale(1);}} 50% {{opacity: 0.5; transform: scale(1.2);}} 100% {{opacity: 1; transform: scale(1);}} }}</style>
+""", unsafe_allow_html=True)
 
-opciones_menu = ["Ventas", "Métricas", "Bóveda", "Equipo", "Auditoría", "Mi Perfil"] if st.session_state.role == "Admin" else ["Ventas", "Métricas", "Papelera", "Mi Perfil"]
-iconos_menu = ["cart-check-fill", "bar-chart-fill", "safe", "people-fill", "eye-fill", "person-badge-fill"] if st.session_state.role == "Admin" else ["cart-check-fill", "bar-chart-fill", "trash3-fill", "person-badge-fill"]
+if st.session_state.role == "Admin":
+    opciones_menu = ["Ventas", "Métricas", "Bóveda", "Equipo", "Auditoría", "Mi Perfil"]
+    iconos_menu = ["cart-check-fill", "bar-chart-fill", "safe", "people-fill", "eye-fill", "person-badge-fill"]
+else:
+    opciones_menu = ["Ventas", "Métricas", "Papelera", "Mi Perfil"]
+    iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill", "person-badge-fill"]
 
-menu = option_menu(menu_title=None, options=opciones_menu, icons=iconos_menu, default_index=0, orientation="horizontal", styles={"container": {"background-color": "rgba(128,128,128,0.1)", "border-radius": "50px"}, "nav-link-selected": {"background-color": "#00D26A"}})
+# Estilos 100% Pill (Mucho padding para que no se vea cuadrado)
+menu = option_menu(
+    menu_title=None,
+    options=opciones_menu,
+    icons=iconos_menu,
+    default_index=0,
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "8px", "background-color": "rgba(128,128,128,0.05)", "border": "1px solid rgba(128,128,128,0.1)", "border-radius": "50px", "margin-bottom": "25px"},
+        "icon": {"color": "#00D26A", "font-size": "16px"},
+        "nav-link": {"font-size": "13px", "text-align": "center", "margin": "0px 4px", "padding": "10px 15px", "--hover-color": "rgba(128,128,128,0.1)", "border-radius": "50px"},
+        "nav-link-selected": {"background-color": "#00D26A", "color": "white", "font-weight": "bold", "border-radius": "50px", "box-shadow": "0 4px 10px rgba(0,210,106,0.3)"},
+    }
+)
+
+if menu == "Salir":
+    cookies.remove('nexa_user_cookie') 
+    st.session_state.logged_in = False
+    st.rerun()
 
 # ==============================================================================
 # VISTAS PRINCIPALES V4.5
 # ==============================================================================
+
 if menu == "Ventas":
     if st.session_state.role == "Admin":
         tipo_filtro = st.selectbox("👥 Filtro Vendedores:", ["🌎 Todos", "👥 Equipo", "👑 Mi Cuenta"], label_visibility="collapsed")
@@ -690,9 +732,9 @@ elif menu == "Papelera":
                     save_df(df_ex_clientes, "ExClientes")
                     st.rerun()
 
-# BÓVEDA EN FORMATO PASTILLA (Imagen 12 Solucionada)
+# LA NUEVA BÓVEDA EN FORMATO PASTILLAS
 elif menu == "Bóveda" or menu == "Inventario":
-    registrar_auditoria("Vista Bóveda", "Abrió la Bóveda de Cuentas.")
+    registrar_auditoria("Vista Bóveda", "Abrió la Bóveda.")
     st.header("🤖 Bóveda Inteligente")
     
     with st.expander("➕ AÑADIR CUENTAS A LA BÓVEDA", expanded=False):
@@ -734,11 +776,10 @@ elif menu == "Bóveda" or menu == "Inventario":
         for idx, row in df_mostrar_inv.iterrows():
             usos_restantes = 2 - int(pd.to_numeric(row['Usos'], errors='coerce'))
             badge_color = "badge-green" if usos_restantes > 0 else "badge-red"
-            texto_badge = f"{usos_restantes} Cupos Libres" if usos_restantes > 0 else "LLENA"
+            texto_badge = f"{usos_restantes} Libres" if usos_restantes > 0 else "LLENA"
             
             titulo_pastilla = f"📧 {row['Correo']} | 📊 Usos: {row['Usos']}"
             
-            # Formato de Pastilla Desplegable
             with st.expander(titulo_pastilla):
                 c_inf1, c_inf2 = st.columns(2)
                 with c_inf1:
@@ -748,7 +789,7 @@ elif menu == "Bóveda" or menu == "Inventario":
                     st.markdown(f"Status: <span class='badge {badge_color}'>{texto_badge}</span>", unsafe_allow_html=True)
                     st.caption(f"🧑‍🚀 Último Vendedor: {row['Last_Seller']}")
                 
-                st.markdown("---")
+                st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
                 cb1, cb2 = st.columns(2)
                 with cb1:
                     if st.button("📝 Editar", key=f"ei_{idx}", use_container_width=True): 
@@ -785,6 +826,7 @@ elif menu == "Equipo":
         with st.container(border=True):
             st.write(f"🧑‍🚀 **{row['Usuario']}** | 📱 {row['Telefono']}")
             st.caption(f"🔑 Clave: {row['Password']} | 📺 Bóveda: **{row['Acceso_YT']}**")
+            st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
             c_edit, c_del = st.columns(2)
             with c_edit:
                 if st.button("📝 Ajustes", key=f"eu_{idx}", use_container_width=True): 
@@ -817,7 +859,6 @@ elif menu == "Auditoría":
     st.header("🛡️ Botón de Pánico")
     st.caption("Descarga una copia completa de toda la información en un formato Excel limpio.")
     
-    # LA DESCARGA EN EXCEL QUE REPARA EL ERROR JSON (Imagen 9)
     excel_panico = generar_backup_excel()
     st.download_button(
         label="📥 DESCARGAR EXCEL TOTAL (Backup)",
@@ -839,9 +880,9 @@ elif menu == "Mi Perfil":
         
         if mis_pagos:
             for i, p in enumerate(mis_pagos):
+                # Efecto pastilla en los métodos de pago
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([1, 4, 1], vertical_alignment="center")
-                    
                     with c1:
                         new_act = st.checkbox("Activo", value=p.get('Activo', True), key=f"act_p_{i}")
                         if new_act != p.get('Activo', True):
@@ -863,10 +904,10 @@ elif menu == "Mi Perfil":
         else: st.caption("No tienes métodos de pago configurados.")
 
         st.write("")
-        # BOTÓN CENTRADO Y PEQUEÑO (Resuelve Imagen 10)
+        # Botón Pequeño y Centrado
         col_btn_spacer1, col_btn_main, col_btn_spacer2 = st.columns([1, 2, 1])
         with col_btn_main:
-            if st.button("➕ Añadir Medio de Pago", type="primary", use_container_width=True):
+            if st.button("➕ Añadir Método", type="primary", use_container_width=True):
                 nuevo_pago_popup(mis_pagos)
 
     st.divider()
