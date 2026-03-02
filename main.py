@@ -16,7 +16,7 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO
 # ==============================================================================
-VERSION_APP = "4.2 (Smart Vault & Multi-Payments)"
+VERSION_APP = "4.3 (Dynamic Payments & Backup Fix)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -47,7 +47,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 2: CSS ADAPTATIVO (OSCURO/CLARO)
+# BLOQUE 2: CSS ADAPTATIVO
 # ==============================================================================
 st.markdown("""
     <style>
@@ -89,7 +89,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS Y AUTO-MIGRACIÓN
+# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS
 # ==============================================================================
 @st.cache_resource
 def init_gsheets():
@@ -130,8 +130,7 @@ def save_df(df, ws_name):
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
     get_sheet_records.clear() 
 
-# ----------------- INICIO DE AUTO-MIGRACIÓN V4.2 -----------------
-
+# --- CARGAR TABLAS ---
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio", "Notas"]
 df_ventas = load_df("Ventas", cols_ventas)
 migr_ventas = False
@@ -161,7 +160,6 @@ cols_usuarios = ["Usuario", "Password", "Rol", "Telefono", "Acceso_YT", "Datos_P
 df_usuarios = load_df("Usuarios", cols_usuarios)
 migr_usr = False
 
-# PLANTILLAS BASE CON LA VARIABLE {pagos}
 TXT_B = "¡Hola {cliente}! 🎉 Aquí tienes tus accesos nuevos de {producto}.\n\n📧 Correo: {correo}\n🔑 Clave: {password}\n📅 Vence el: {vencimiento}\n\n¡Disfruta tu servicio!"
 TXT_R = "Hola {cliente} ⏰, te recuerdo que tu cuenta de {producto} vencerá el {vencimiento}. ¿Deseas ir renovando para no perder el servicio?\n\n💳 Puedes transferir o Yapear aquí:\n{pagos}"
 TXT_V = "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO.\n\nPara reactivar tu servicio de inmediato, por favor envía la renovación a:\n{pagos}"
@@ -179,12 +177,23 @@ for idx, row in df_usuarios.iterrows():
         df_usuarios.at[idx, 'P_Rec'] = TXT_R; modificado = True
     if not str(row.get('P_Ven')).strip() or str(row.get('P_Ven')).strip() == 'nan': 
         df_usuarios.at[idx, 'P_Ven'] = TXT_V; modificado = True
-    if not str(row.get('Datos_Pago')).strip() or str(row.get('Datos_Pago')).strip() == 'nan':
-        df_usuarios.at[idx, 'Datos_Pago'] = row.get('Telefono', ''); modificado = True
+    
+    # MIGRACIÓN AL NUEVO SISTEMA DE PAGOS DINÁMICO
+    dp_actual = str(row.get('Datos_Pago', '')).strip()
+    if not dp_actual.startswith('['): 
+        tel = str(row.get('Telefono', ''))
+        json_inicial = json.dumps([
+            {"Activo": True, "Metodo": "Yape", "Cuenta": tel},
+            {"Activo": False, "Metodo": "Plin", "Cuenta": tel}
+        ])
+        df_usuarios.at[idx, 'Datos_Pago'] = json_inicial
+        modificado = True
+        
     if modificado: migr_usr = True
 
 if df_usuarios.empty:
-    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "", "Si", "Yape: 902028672", TXT_B, TXT_R, TXT_V, "Sistema"]], columns=cols_usuarios)
+    json_base = json.dumps([{"Activo": True, "Metodo": "Yape", "Cuenta": ""}])
+    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "", "Si", json_base, TXT_B, TXT_R, TXT_V, "Sistema"]], columns=cols_usuarios)
     migr_usr = True
 
 if migr_usr: save_df(df_usuarios, "Usuarios")
@@ -192,7 +201,7 @@ if migr_usr: save_df(df_usuarios, "Usuarios")
 df_auditoria = load_df("Auditoria", ["Fecha", "Usuario", "Accion", "Detalle"])
 
 # ==============================================================================
-# FUNCIONES DE APOYO Y MOTOR (V4.2)
+# FUNCIONES DE APOYO
 # ==============================================================================
 def registrar_auditoria(accion, detalle):
     global df_auditoria
@@ -220,14 +229,20 @@ def formatear_mes_anio(yyyy_mm):
     except: return yyyy_mm
 
 def procesar_plantilla(tipo, row_venta, mi_perfil):
-    pagos = mi_perfil.get('Datos_Pago', mi_perfil.get('Telefono', ''))
+    try:
+        lista_pagos = json.loads(mi_perfil.get('Datos_Pago', '[]'))
+        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']}" for p in lista_pagos if p.get('Activo', False)]
+        str_pagos = "\n".join(pagos_activos) if pagos_activos else "No especificó medios de pago."
+    except:
+        str_pagos = "No especificó medios de pago."
+
     if tipo == "Bienvenida": base = mi_perfil.get('P_Bienvenida', TXT_B)
     elif tipo == "Recordatorio": base = mi_perfil.get('P_Rec', TXT_R)
     else: base = mi_perfil.get('P_Ven', TXT_V)
         
     msj = str(base).replace("{cliente}", str(row_venta['Cliente'])).replace("{producto}", str(row_venta['Producto']))\
               .replace("{vencimiento}", str(row_venta['Vencimiento'])).replace("{correo}", str(row_venta['Correo']))\
-              .replace("{password}", str(row_venta['Pass'])).replace("{pagos}", str(pagos))
+              .replace("{password}", str(row_venta['Pass'])).replace("{pagos}", str_pagos)
     return f"https://wa.me/{row_venta['WhatsApp']}?text={quote(msj)}"
 
 # ==============================================================================
@@ -275,7 +290,7 @@ if not st.session_state.logged_in:
 mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN (Pop-Ups)
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy):
@@ -341,7 +356,6 @@ def renovar_venta_popup(idx, row):
         df_ventas.at[idx, 'Vencimiento'], df_ventas.at[idx, 'Correo'], df_ventas.at[idx, 'Pass'] = nueva_fecha, mv, pv
         save_df(df_ventas, "Ventas")
         
-        # ACTUALIZACIÓN DE BÓVEDA AUTOMÁTICA
         if tipo_cta == "Asignar cuenta nueva" and usa_boveda:
             idx_inv = df_inv[df_inv['Correo'] == mv].index
             if not idx_inv.empty:
@@ -424,7 +438,7 @@ def nueva_venta_popup():
         df_ventas = pd.concat([df_ventas, nueva], ignore_index=True)
         save_df(df_ventas, "Ventas")
         
-        # ACTUALIZACIÓN DE BÓVEDA AUTOMÁTICA
+        # ACTUALIZACIÓN DE BÓVEDA AUTOMÁTICA Y CREACIÓN DE FALTANTES
         if usa_boveda:
             idx_inv = df_inv[df_inv['Correo'] == mv].index
             if not idx_inv.empty:
@@ -432,7 +446,6 @@ def nueva_venta_popup():
                 asig_previo = str(df_inv.at[idx_inv[0], 'Asignado_A'])
                 df_inv.at[idx_inv[0], 'Asignado_A'] = nom if asig_previo == "Nadie" else f"{asig_previo} | {nom}"
             else:
-                # Si escribió uno manual, lo sumamos a la bóveda automáticamente
                 df_inv = pd.concat([df_inv, pd.DataFrame([[mv, pv, 1, nom]], columns=df_inv.columns)], ignore_index=True)
             save_df(df_inv, "Inventario")
 
@@ -440,7 +453,7 @@ def nueva_venta_popup():
         st.session_state.toast_msg = "🎉 ¡Venta registrada!"; st.rerun()
 
 # ==============================================================================
-# BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA (V4.2)
+# BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA (V4.3)
 # ==============================================================================
 
 cupos_libres = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
@@ -486,7 +499,7 @@ if menu == "Salir":
     st.rerun()
 
 # ==============================================================================
-# VISTAS PRINCIPALES V4.2
+# VISTAS PRINCIPALES V4.3
 # ==============================================================================
 
 if menu == "Ventas":
@@ -524,7 +537,6 @@ if menu == "Ventas":
 
     st.write("---")
 
-    # PAGINACIÓN V4.2
     ITEMS_POR_PAGINA = 50
     total_items = len(df_mostrar)
     if total_items > 0:
@@ -663,7 +675,7 @@ elif menu == "Bóveda" or menu == "Inventario":
         with c_man:
             m = st.text_input("Gmail")
             p = st.text_input("Contraseña")
-            u = st.selectbox("Usos Actuales (0 = Nueva)", [0,1,2])
+            u = st.selectbox("Usos (Cupos)", [0,1,2])
             if st.button("Guardar en Bóveda", type="primary", use_container_width=True):
                 df_inv = pd.concat([df_inv, pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)], ignore_index=True)
                 save_df(df_inv, "Inventario")
@@ -674,7 +686,6 @@ elif menu == "Bóveda" or menu == "Inventario":
     for idx, row in df_inv.iterrows():
         with st.container(border=True):
             st.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
-            st.caption(f"👥 Asignado a: {row['Asignado_A']}")
             c1, c2 = st.columns(2)
             with c2:
                 if st.button("🗑️ Eliminar", key=f"di_{idx}", use_container_width=True):
@@ -688,7 +699,9 @@ elif menu == "Equipo":
             dar_acceso_yt = st.checkbox("Dar acceso a la Bóveda Automática")
             if st.form_submit_button("Crear Perfil", type="primary", use_container_width=True):
                 usr_generado = generar_usuario(nuevo_nom); pwd_generada = generar_password_aleatoria()
-                nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", limpiar_whatsapp(nuevo_tel), "Si" if dar_acceso_yt else "No", "", "", "", "", "Sistema"]], columns=df_usuarios.columns)
+                
+                json_base = json.dumps([{"Activo": True, "Metodo": "Yape", "Cuenta": limpiar_whatsapp(nuevo_tel)}, {"Activo": False, "Metodo": "Plin", "Cuenta": limpiar_whatsapp(nuevo_tel)}])
+                nu_df = pd.DataFrame([[usr_generado, pwd_generada, "Vendedor", limpiar_whatsapp(nuevo_tel), "Si" if dar_acceso_yt else "No", json_base, TXT_B, TXT_R, TXT_V, "Sistema"]], columns=df_usuarios.columns)
                 df_usuarios = pd.concat([df_usuarios, nu_df], ignore_index=True); save_df(df_usuarios, "Usuarios")
                 registrar_auditoria("Equipo", f"Creó vendedor {usr_generado}")
                 st.success(f"✅ Usuario: {usr_generado} | Clave: {pwd_generada}")
@@ -725,17 +738,46 @@ elif menu == "Auditoría":
     st.header("🛡️ Botón de Pánico")
     st.caption("Descarga una copia completa de toda la información al instante.")
     
-    backup_data = { "Ventas": df_ventas.to_dict(orient="records"), "Inventario": df_inv.to_dict(orient="records"), "Usuarios": df_usuarios.to_dict(orient="records") }
+    # EL FIX DEL BACKUP PARA FECHAS
+    backup_data = { 
+        "Ventas": df_ventas.astype(str).to_dict(orient="records"), 
+        "Inventario": df_inv.astype(str).to_dict(orient="records"), 
+        "Usuarios": df_usuarios.astype(str).to_dict(orient="records") 
+    }
     json_backup = json.dumps(backup_data, indent=2).encode('utf-8')
     st.download_button(label="📥 DESCARGAR BACKUP TOTAL", data=json_backup, file_name=f"Backup_NEXA_{datetime.now().date()}.json", mime='application/json', use_container_width=True)
 
 elif menu == "Mi Perfil":
     st.header("⚙️ Ajustes Personales")
+    
+    # ---- NUEVA TABLA DINÁMICA DE PAGOS ----
+    st.subheader("💳 Mis Medios de Pago")
+    st.info("Marca con ✔️ los que quieras usar. Puedes borrar y añadir nuevos (Ej: BCP, Agora).")
+    
+    try:
+        mis_pagos_lista = json.loads(mi_perfil['Datos_Pago'])
+    except:
+        mis_pagos_lista = [{"Activo": True, "Metodo": "Yape", "Cuenta": mi_perfil.get('Telefono', '')}, {"Activo": False, "Metodo": "Plin", "Cuenta": mi_perfil.get('Telefono', '')}]
+    
+    df_pagos = pd.DataFrame(mis_pagos_lista)
+    
+    # Componente mágico de Streamlit (data_editor)
+    edit_pagos = st.data_editor(
+        df_pagos,
+        num_rows="dynamic",
+        column_config={
+            "Activo": st.column_config.CheckboxColumn("✔ Activo", default=True, width="small"),
+            "Metodo": st.column_config.TextColumn("🏦 Plataforma", required=True),
+            "Cuenta": st.column_config.TextColumn("🔢 Número / Código", required=True)
+        },
+        use_container_width=True,
+        hide_index=True,
+        key="editor_pagos"
+    )
+    # ---------------------------------------
+
+    st.divider()
     with st.form("form_perfil"):
-        st.subheader("💳 Mis Medios de Pago")
-        st.info("Escribe aquí todos tus métodos de pago. Esto reemplazará la variable {pagos} en tus mensajes.")
-        mi_pagos = st.text_area("Ej: Yape: 999... (Juan Perez) / Plin: 888...", value=mi_perfil.get('Datos_Pago', mi_perfil.get('Telefono', '')), height=80)
-        
         st.subheader("💬 Mis Mensajes Auto-Generados")
         st.caption("Variables que puedes usar: `{cliente}`, `{producto}`, `{vencimiento}`, `{correo}`, `{password}`, `{pagos}`")
         pb = st.text_area("📨 Bienvenida / Accesos Nuevos", value=mi_perfil.get('P_Bienvenida', ''), height=150)
@@ -744,7 +786,9 @@ elif menu == "Mi Perfil":
         
         if st.form_submit_button("💾 Guardar Mi Perfil", type="primary", use_container_width=True):
             idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
-            df_usuarios.at[idx_usr, 'Datos_Pago'] = mi_pagos
+            
+            # Guardamos la tabla de pagos en formato JSON
+            df_usuarios.at[idx_usr, 'Datos_Pago'] = edit_pagos.to_json(orient="records")
             df_usuarios.at[idx_usr, 'P_Bienvenida'] = pb
             df_usuarios.at[idx_usr, 'P_Rec'] = pr
             df_usuarios.at[idx_usr, 'P_Ven'] = pv
