@@ -16,7 +16,7 @@ import io
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO
 # ==============================================================================
-VERSION_APP = "4.5 (Pure Pill UI & Custom Payments)"
+VERSION_APP = "4.6 (Consistent Pill UI & Edit Payments)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -55,9 +55,8 @@ st.markdown("""
     [data-testid="collapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* EFECTO PASTILLA BUBBLY PARA LOS CONTENEDORES Y ACORDEONES */
     div[data-testid="stExpander"], div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 28px !important; /* Curvatura extrema tipo pastilla */
+        border-radius: 28px !important; 
         border: 1px solid rgba(128,128,128,0.2) !important; 
         background-color: var(--secondary-background-color) !important; 
         margin-bottom: 12px; 
@@ -67,7 +66,6 @@ st.markdown("""
     div[data-testid="stExpander"] summary p { font-weight: bold !important; font-size: 15px !important; }
     div[data-testid="stVerticalBlockBorderWrapper"]:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 210, 106, 0.15) !important; border-color: #00D26A !important; }
     
-    /* DASHBOARD KPI CARDS */
     .kpi-card { padding: 20px; border-radius: 28px; color: white; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     .kpi-blue { background: linear-gradient(135deg, #0052D4, #007BFF); }
     .kpi-orange { background: linear-gradient(135deg, #C85A17, #FF8C00); }
@@ -76,7 +74,6 @@ st.markdown("""
     .kpi-title { font-size: 14px; opacity: 0.9; margin-bottom: 5px; }
     .kpi-value { font-size: 28px; font-weight: bold; margin: 0; }
     
-    /* ETIQUETAS */
     .badge { padding: 5px 14px; border-radius: 50px; font-size: 12px; font-weight: bold; margin-right: 8px; display: inline-block; margin-bottom: 5px;}
     .badge-netflix { background-color: rgba(229, 9, 20, 0.15); color: #E50914; border: 1px solid rgba(229, 9, 20, 0.3); }
     .badge-youtube { background-color: rgba(255, 0, 0, 0.15); color: #FF4444; border: 1px solid rgba(255, 0, 0, 0.3); }
@@ -87,22 +84,10 @@ st.markdown("""
     .badge-orange { background-color: rgba(255, 152, 0, 0.15); color: #FF9800; border: 1px solid rgba(255, 152, 0, 0.3);}
     .badge-red { background-color: rgba(244, 67, 54, 0.15); color: #F44336; border: 1px solid rgba(244, 67, 54, 0.3);}
     
-    /* BOTONES 100% PÍLDORA */
-    .stButton>button, .stLinkButton>a { 
-        border-radius: 50px !important; /* Forma de pastilla perfecta */
-        height: 42px !important; 
-        padding: 0px 20px !important; 
-        display: flex !important; align-items: center !important; justify-content: center !important; 
-        width: 100% !important; font-size: 15px !important; font-weight: 600 !important; margin: 0px !important; transition: all 0.2s; 
-    }
+    .stButton>button, .stLinkButton>a { border-radius: 50px !important; height: 42px !important; padding: 0px 20px !important; display: flex !important; align-items: center !important; justify-content: center !important; width: 100% !important; font-size: 15px !important; font-weight: 600 !important; margin: 0px !important; transition: all 0.2s; }
     .stLinkButton>a { background-color: #25D366 !important; color: white !important; border: none !important; }
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div, .stTextArea>div>div>textarea { border-radius: 18px !important; }
     
-    /* CAJAS DE TEXTO REDONDEADAS */
-    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div, .stTextArea>div>div>textarea { 
-        border-radius: 18px !important; 
-    }
-    
-    /* ALINEACIÓN DE BOTONES */
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] { flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important; }
     .element-container:has(.fila-botones) + .element-container > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] { min-width: 45% !important; flex: 1 1 auto !important; margin-bottom: 5px; }
     </style>
@@ -150,7 +135,7 @@ def save_df(df, ws_name):
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
     get_sheet_records.clear() 
 
-# --- CARGAR Y MIGRAR TABLAS ---
+# --- CARGAR TABLAS ---
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio", "Notas"]
 df_ventas = load_df("Ventas", cols_ventas)
 migr_ventas = False
@@ -192,7 +177,8 @@ TXT_V = "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO.\n\nPara reacti
 
 for col in cols_usuarios:
     if col not in df_usuarios.columns: 
-        df_usuarios[col] = ""; migr_usr = True
+        df_usuarios[col] = ""
+        migr_usr = True
 
 for idx, row in df_usuarios.iterrows():
     modificado = False
@@ -206,7 +192,8 @@ for idx, row in df_usuarios.iterrows():
     dp_actual = str(row.get('Datos_Pago', '')).strip()
     if not dp_actual.startswith('['): 
         json_inicial = json.dumps([{"Id": 1, "Titular": row.get('Usuario', 'Admin'), "Activo": True, "Metodo": "Yape", "Cuenta": str(row.get('Telefono', NUMERO_ADMIN))}])
-        df_usuarios.at[idx, 'Datos_Pago'] = json_inicial; modificado = True
+        df_usuarios.at[idx, 'Datos_Pago'] = json_inicial
+        modificado = True
         
     if modificado: migr_usr = True
 
@@ -230,11 +217,17 @@ def registrar_auditoria(accion, detalle):
     df_auditoria = pd.concat([df_auditoria, nuevo], ignore_index=True)
     save_df(df_auditoria, "Auditoria")
 
-def generar_password_aleatoria(): return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(8))
-def generar_usuario(nombre): base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower()); return f"{base}{random.randint(100, 999)}"
+def generar_password_aleatoria():
+    return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(8))
+
+def generar_usuario(nombre):
+    base = re.sub(r'[^a-zA-Z0-9]', '', str(nombre).split()[0].lower())
+    return f"{base}{random.randint(100, 999)}"
+
 def limpiar_whatsapp(numero):
     solo_numeros = re.sub(r'\D', '', str(numero))
-    return f"51{solo_numeros}" if len(solo_numeros) == 9 else solo_numeros
+    if len(solo_numeros) == 9: return f"51{solo_numeros}"
+    return solo_numeros
 
 def formatear_mes_anio(yyyy_mm):
     MESES = {'01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr', '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic'}
@@ -244,9 +237,10 @@ def formatear_mes_anio(yyyy_mm):
 def procesar_plantilla(tipo, row_venta, mi_perfil):
     try:
         lista_pagos = json.loads(mi_perfil.get('Datos_Pago', '[]'))
-        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']} (A nombre de: {p['Titular']})" for p in lista_pagos if p.get('Activo', False)]
-        str_pagos = "\n".join(pagos_activos) if pagos_activos else "Consultar medio de pago."
-    except: str_pagos = "Consultar medio de pago."
+        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']} ({p.get('Titular', '')})" for p in lista_pagos if p.get('Activo', False)]
+        str_pagos = "\n".join(pagos_activos) if pagos_activos else "Consultar medio de pago por interno."
+    except:
+        str_pagos = "Consultar medio de pago por interno."
 
     if tipo == "Bienvenida": base = mi_perfil.get('P_Bienvenida', TXT_B)
     elif tipo == "Recordatorio": base = mi_perfil.get('P_Rec', TXT_R)
@@ -259,8 +253,10 @@ def procesar_plantilla(tipo, row_venta, mi_perfil):
 
 def generar_backup_excel():
     output = io.BytesIO()
-    df_v = df_ventas.astype(str); df_i = df_inv.astype(str)
-    df_u = df_usuarios.astype(str); df_a = df_auditoria.astype(str)
+    df_v = df_ventas.astype(str)
+    df_i = df_inv.astype(str)
+    df_u = df_usuarios.astype(str)
+    df_a = df_auditoria.astype(str)
     df_e = df_ex_clientes.astype(str)
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -311,7 +307,7 @@ if not st.session_state.logged_in:
 mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
 
 # ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN GLOBALES (CERO ERRORES SYNTAX)
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
 def mostrar_popup_alertas(df_urgente, hoy, perfil):
@@ -473,7 +469,7 @@ def nueva_venta_popup():
         registrar_auditoria("Venta Nueva", f"Creó venta de {prod} para {nom}")
         st.session_state.toast_msg = "🎉 ¡Venta registrada!"; st.rerun()
 
-@st.dialog("Modificar Cuenta de Bóveda")
+@st.dialog("📝 Modificar Bóveda")
 def editar_boveda_popup(idx, row):
     global df_inv
     nP = st.text_input("Nueva Clave", value=row['Password'])
@@ -487,7 +483,7 @@ def editar_boveda_popup(idx, row):
         registrar_auditoria("Edición Bóveda", f"Editó usos de {row['Correo']}")
         st.rerun()
 
-@st.dialog("Editar Vendedor")
+@st.dialog("📝 Editar Vendedor")
 def editar_vendedor_popup(idx, row):
     global df_usuarios
     st.write(f"Editando a: **{row['Usuario']}**")
@@ -525,6 +521,36 @@ def nuevo_pago_popup(mis_pagos_actuales):
         else:
             st.warning("Completa el nombre del método y el número.")
 
+@st.dialog("📝 Editar Medio de Pago")
+def editar_pago_popup(idx_pago, pago_actual, mis_pagos_actuales):
+    global df_usuarios
+    opciones = ["Yape", "Plin", "BCP", "BBVA", "Interbank", "Agora", "Transferencia", "Otro"]
+    
+    metodo_base = pago_actual['Metodo']
+    idx_metodo = opciones.index("Otro") if metodo_base not in opciones else opciones.index(metodo_base)
+    val_otro = metodo_base if metodo_base not in opciones else ""
+
+    t_p = st.selectbox("Plataforma Bancaria", opciones, index=idx_metodo)
+    
+    metodo_final = t_p
+    if t_p == "Otro":
+        metodo_final = st.text_input("Escribe el nombre del Banco/App", value=val_otro, placeholder="Ej: PayPal...")
+        
+    n_t = st.text_input("Nombre de Persona Titular", value=pago_actual.get('Titular', ''), placeholder="Ej: Juan Perez")
+    n_c = st.text_input("Número (Celular o Cuenta Larga)", value=pago_actual['Cuenta'])
+    
+    if st.button("Actualizar Método", type="primary", use_container_width=True):
+        if metodo_final and n_c:
+            mis_pagos_actuales[idx_pago]['Metodo'] = metodo_final
+            mis_pagos_actuales[idx_pago]['Titular'] = n_t
+            mis_pagos_actuales[idx_pago]['Cuenta'] = n_c
+            idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
+            df_usuarios.at[idx_usr, 'Datos_Pago'] = json.dumps(mis_pagos_actuales)
+            save_df(df_usuarios, "Usuarios")
+            st.rerun()
+        else:
+            st.warning("No puedes dejar campos vacíos.")
+
 # ==============================================================================
 # BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA (ESTILO iOS PURO)
 # ==============================================================================
@@ -552,7 +578,6 @@ else:
     opciones_menu = ["Ventas", "Métricas", "Papelera", "Mi Perfil"]
     iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill", "person-badge-fill"]
 
-# Estilos 100% Pill (Mucho padding para que no se vea cuadrado)
 menu = option_menu(
     menu_title=None,
     options=opciones_menu,
@@ -573,7 +598,7 @@ if menu == "Salir":
     st.rerun()
 
 # ==============================================================================
-# VISTAS PRINCIPALES V4.5
+# VISTAS PRINCIPALES
 # ==============================================================================
 
 if menu == "Ventas":
@@ -732,7 +757,7 @@ elif menu == "Papelera":
                     save_df(df_ex_clientes, "ExClientes")
                     st.rerun()
 
-# LA NUEVA BÓVEDA EN FORMATO PASTILLAS
+# BÓVEDA EN FORMATO PASTILLA (Como Pediste)
 elif menu == "Bóveda" or menu == "Inventario":
     registrar_auditoria("Vista Bóveda", "Abrió la Bóveda.")
     st.header("🤖 Bóveda Inteligente")
@@ -872,42 +897,51 @@ elif menu == "Auditoría":
 elif menu == "Mi Perfil":
     st.header("⚙️ Ajustes Personales")
     
-    with st.expander("💳 MIS MEDIOS DE PAGO", expanded=True):
-        st.info("Marca con ✔️ los que quieras usar. Puedes eliminar o añadir nuevos.")
-        
+    # LA NUEVA ESTRUCTURA DE PAGOS (Pastillas Desplegables igual que Ventas)
+    st.subheader("💳 Mis Medios de Pago")
+    st.info("Estos son los medios de pago que verán tus clientes. Haz clic en uno para editarlo.")
+    
+    with st.container(border=True):
         try: mis_pagos = json.loads(mi_perfil.get('Datos_Pago', '[]'))
         except: mis_pagos = []
         
         if mis_pagos:
             for i, p in enumerate(mis_pagos):
-                # Efecto pastilla en los métodos de pago
-                with st.container(border=True):
-                    c1, c2, c3 = st.columns([1, 4, 1], vertical_alignment="center")
-                    with c1:
-                        new_act = st.checkbox("Activo", value=p.get('Activo', True), key=f"act_p_{i}")
-                        if new_act != p.get('Activo', True):
-                            mis_pagos[i]['Activo'] = new_act
-                            idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
-                            df_usuarios.at[idx_usr, 'Datos_Pago'] = json.dumps(mis_pagos)
-                            save_df(df_usuarios, "Usuarios")
-                            st.rerun()
-                    with c2:
-                        st.write(f"**{p['Metodo']}** - {p['Cuenta']}")
-                        st.caption(f"A nombre de: {p.get('Titular', '')}")
-                    with c3:
-                        if st.button("🗑️", key=f"del_p_{i}"):
+                estado_icono = "🟢" if p.get('Activo', True) else "🔴"
+                titulo_pago = f"{estado_icono} {p['Metodo']} | {p['Cuenta']}"
+                
+                with st.expander(titulo_pago):
+                    # Checkbox para activar/desactivar rápido sin abrir pop-up
+                    new_act = st.checkbox("Método Activo (Visible en mensajes)", value=p.get('Activo', True), key=f"act_p_{i}")
+                    if new_act != p.get('Activo', True):
+                        mis_pagos[i]['Activo'] = new_act
+                        idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
+                        df_usuarios.at[idx_usr, 'Datos_Pago'] = json.dumps(mis_pagos)
+                        save_df(df_usuarios, "Usuarios")
+                        st.rerun()
+                    
+                    st.write(f"👤 **Titular:** {p.get('Titular', 'No especificado')}")
+                    
+                    st.markdown('<div class="fila-botones"></div>', unsafe_allow_html=True)
+                    cp1, cp2 = st.columns(2)
+                    with cp1:
+                        if st.button("📝 Editar", key=f"e_pag_{i}", use_container_width=True):
+                            editar_pago_popup(i, p, mis_pagos)
+                    with cp2:
+                        if st.button("🗑️ Eliminar", key=f"d_pag_{i}", use_container_width=True):
                             del mis_pagos[i]
                             idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
                             df_usuarios.at[idx_usr, 'Datos_Pago'] = json.dumps(mis_pagos)
                             save_df(df_usuarios, "Usuarios")
                             st.rerun()
-        else: st.caption("No tienes métodos de pago configurados.")
+        else: 
+            st.caption("No tienes métodos de pago configurados.")
 
         st.write("")
-        # Botón Pequeño y Centrado
+        # Botón Pequeño y Centrado (Imagen 10)
         col_btn_spacer1, col_btn_main, col_btn_spacer2 = st.columns([1, 2, 1])
         with col_btn_main:
-            if st.button("➕ Añadir Método", type="primary", use_container_width=True):
+            if st.button("➕ Añadir Nuevo Método", type="primary", use_container_width=True):
                 nuevo_pago_popup(mis_pagos)
 
     st.divider()
