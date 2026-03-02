@@ -14,16 +14,28 @@ from streamlit_cookies_controller import CookieController
 from streamlit_option_menu import option_menu
 
 # ==============================================================================
-# BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
+# BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO (AQUÍ ESTÁ LA CORRECCIÓN)
 # ==============================================================================
-VERSION_APP = "4.0.1 (Enterprise Edition - Fix)"
+VERSION_APP = "4.1 (Auto-Migración y Textos Base)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
 
 st.set_page_config(page_title="NEXA-Stream", page_icon="🚀", layout="wide", initial_sidebar_state="collapsed")
 
+# INICIALIZAR TODAS LAS VARIABLES ANTES DE CUALQUIER OTRA COSA
+if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+if 'user' not in st.session_state: st.session_state.user = ""
+if 'role' not in st.session_state: st.session_state.role = ""
+if 'acceso_yt' not in st.session_state: st.session_state.acceso_yt = "No"
+if 'alertas_vistas' not in st.session_state: st.session_state.alertas_vistas = False 
+if 'temp_emails' not in st.session_state: st.session_state.temp_emails = []
+if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
+if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = None
+if 'nuevo_vend_nom' not in st.session_state: st.session_state.nuevo_vend_nom = None
+if 'nuevo_vend_tel' not in st.session_state: st.session_state.nuevo_vend_tel = None
 if 'toast_msg' not in st.session_state: st.session_state.toast_msg = None
+
 if st.session_state.toast_msg:
     st.toast(st.session_state.toast_msg)
     st.session_state.toast_msg = None
@@ -78,7 +90,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS
+# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS Y AUTO-MIGRACIÓN
 # ==============================================================================
 @st.cache_resource
 def init_gsheets():
@@ -119,31 +131,68 @@ def save_df(df, ws_name):
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
     get_sheet_records.clear() 
 
-# --- CARGAR TABLAS ---
+# ----------------- INICIO DE AUTO-MIGRACIÓN -----------------
+
+# 1. MIGRAR VENTAS Y PAPELERA
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio", "Notas"]
 df_ventas = load_df("Ventas", cols_ventas)
-if "Notas" not in df_ventas.columns: df_ventas["Notas"] = ""
+migr_ventas = False
+if "Notas" not in df_ventas.columns: df_ventas["Notas"] = ""; migr_ventas = True
+if migr_ventas: save_df(df_ventas, "Ventas")
 df_ventas['Vencimiento'] = pd.to_datetime(df_ventas['Vencimiento'], errors='coerce').dt.date
 
 df_ex_clientes = load_df("ExClientes", cols_ventas)
-if "Notas" not in df_ex_clientes.columns: df_ex_clientes["Notas"] = ""
+migr_ex = False
+if "Notas" not in df_ex_clientes.columns: df_ex_clientes["Notas"] = ""; migr_ex = True
+if migr_ex: save_df(df_ex_clientes, "ExClientes")
 
 df_inv = load_df("Inventario", ["Correo", "Password", "Usos", "Asignado_A"])
 
+# 2. MIGRAR PLATAFORMAS (Recuperar YouTube y columna Usa_Boveda)
 df_plat = load_df("Plataformas", ["Nombre", "Usa_Boveda"])
-if df_plat.empty:
-    df_plat = pd.DataFrame([["YouTube Premium", "Si"], ["Netflix", "No"], ["Disney+", "No"]], columns=["Nombre", "Usa_Boveda"])
-    save_df(df_plat, "Plataformas")
+migr_plat = False
+if "Usa_Boveda" not in df_plat.columns:
+    df_plat["Usa_Boveda"] = df_plat["Nombre"].apply(lambda x: "Si" if "YouTube" in str(x) else "No")
+    migr_plat = True
+if "YouTube Premium" not in df_plat["Nombre"].values:
+    df_plat = pd.concat([df_plat, pd.DataFrame([{"Nombre": "YouTube Premium", "Usa_Boveda": "Si"}])], ignore_index=True)
+    migr_plat = True
+if migr_plat: save_df(df_plat, "Plataformas")
 lista_plataformas = df_plat['Nombre'].tolist()
 
+# 3. MIGRAR USUARIOS Y TEXTOS BASE
 cols_usuarios = ["Usuario", "Password", "Rol", "Telefono", "Acceso_YT", "Yape", "P_Bienvenida", "P_Rec", "P_Ven", "Tema"]
 df_usuarios = load_df("Usuarios", cols_usuarios)
+migr_usr = False
+
+# PLANTILLAS BASE POR DEFECTO (Las que me pediste)
+TXT_B = "¡Hola {cliente}! 🎉 Aquí tienes tus accesos nuevos de {producto}.\n\n📧 Correo: {correo}\n🔑 Clave: {password}\n📅 Vence el: {vencimiento}\n\n¡Disfruta tu servicio!"
+TXT_R = "Hola {cliente} ⏰, te recuerdo que tu cuenta de {producto} vencerá el {vencimiento}. ¿Deseas ir renovando para no perder el servicio?\n\nPuedes transferir o Yapear a este número: {yape}"
+TXT_V = "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO.\n\nPara reactivar tu servicio de inmediato, por favor envía la renovación a mi Yape/Plin: {yape}"
+
 for col in cols_usuarios:
-    if col not in df_usuarios.columns: df_usuarios[col] = ""
+    if col not in df_usuarios.columns: 
+        df_usuarios[col] = ""
+        migr_usr = True
+
+# Llenar vacíos con las plantillas base
+for idx, row in df_usuarios.iterrows():
+    modificado = False
+    if not str(row.get('P_Bienvenida')).strip() or str(row.get('P_Bienvenida')).strip() == 'nan': 
+        df_usuarios.at[idx, 'P_Bienvenida'] = TXT_B; modificado = True
+    if not str(row.get('P_Rec')).strip() or str(row.get('P_Rec')).strip() == 'nan': 
+        df_usuarios.at[idx, 'P_Rec'] = TXT_R; modificado = True
+    if not str(row.get('P_Ven')).strip() or str(row.get('P_Ven')).strip() == 'nan': 
+        df_usuarios.at[idx, 'P_Ven'] = TXT_V; modificado = True
+    if not str(row.get('Yape')).strip() or str(row.get('Yape')).strip() == 'nan':
+        df_usuarios.at[idx, 'Yape'] = row.get('Telefono', ''); modificado = True
+    if modificado: migr_usr = True
 
 if df_usuarios.empty:
-    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "", "Si", "", "", "", "", "Sistema"]], columns=cols_usuarios)
-    save_df(df_usuarios, "Usuarios")
+    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "", "Si", "", TXT_B, TXT_R, TXT_V, "Sistema"]], columns=cols_usuarios)
+    migr_usr = True
+
+if migr_usr: save_df(df_usuarios, "Usuarios")
 
 df_auditoria = load_df("Auditoria", ["Fecha", "Usuario", "Accion", "Detalle"])
 
@@ -176,39 +225,21 @@ def formatear_mes_anio(yyyy_mm):
     except: return yyyy_mm
 
 def procesar_plantilla(tipo, row_venta, mi_perfil):
-    yape = mi_perfil['Yape'] if mi_perfil['Yape'] else mi_perfil['Telefono']
-    if tipo == "Bienvenida":
-        base = mi_perfil['P_Bienvenida'] if mi_perfil['P_Bienvenida'] else "¡Hola {cliente}! Aquí tus accesos de {producto}. Correo: {correo} | Clave: {password} | Vence: {vencimiento}."
-    elif tipo == "Recordatorio":
-        base = mi_perfil['P_Rec'] if mi_perfil['P_Rec'] else "Hola {cliente}, tu cuenta {producto} vencerá el {vencimiento}. Renueva a mi Yape/Plin: {yape}"
-    else:
-        base = mi_perfil['P_Ven'] if mi_perfil['P_Ven'] else "🚨 Hola {cliente}, tu cuenta {producto} Venció. Renueva a mi Yape/Plin: {yape}"
+    yape = mi_perfil.get('Yape', mi_perfil.get('Telefono', ''))
+    if tipo == "Bienvenida": base = mi_perfil.get('P_Bienvenida', TXT_B)
+    elif tipo == "Recordatorio": base = mi_perfil.get('P_Rec', TXT_R)
+    else: base = mi_perfil.get('P_Ven', TXT_V)
         
-    msj = base.replace("{cliente}", str(row_venta['Cliente'])).replace("{producto}", str(row_venta['Producto']))\
+    msj = str(base).replace("{cliente}", str(row_venta['Cliente'])).replace("{producto}", str(row_venta['Producto']))\
               .replace("{vencimiento}", str(row_venta['Vencimiento'])).replace("{correo}", str(row_venta['Correo']))\
               .replace("{password}", str(row_venta['Pass'])).replace("{yape}", str(yape))
     return f"https://wa.me/{row_venta['WhatsApp']}?text={quote(msj)}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN Y DECLARACIÓN DE VARIABLES
+# BLOQUE 4: SISTEMA DE LOGIN 
 # ==============================================================================
 cookies = CookieController()
 usuario_guardado = cookies.get('nexa_user_cookie')
-
-# ---- AQUI ESTÁN LAS 5 LÍNEAS RESTAURADAS QUE DABAN EL ERROR ----
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.user = ""
-    st.session_state.role = ""
-    st.session_state.acceso_yt = "No"
-    st.session_state.alertas_vistas = False 
-
-if 'temp_emails' not in st.session_state: st.session_state.temp_emails = []
-if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
-if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = None
-if 'nuevo_vend_nom' not in st.session_state: st.session_state.nuevo_vend_nom = None
-if 'nuevo_vend_tel' not in st.session_state: st.session_state.nuevo_vend_tel = None
-# ------------------------------------------------------------------
 
 if not st.session_state.logged_in and usuario_guardado:
     match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
@@ -296,7 +327,10 @@ def renovar_venta_popup(idx, row):
     
     if tipo_cta == "Asignar cuenta nueva":
         ca, cb = st.columns(2)
-        usa_boveda = df_plat.loc[df_plat['Nombre'] == row['Producto'], 'Usa_Boveda'].values[0] == "Si" if not df_plat.empty else False
+        usa_boveda = False
+        if not df_plat.empty and row['Producto'] in df_plat['Nombre'].values:
+            usa_boveda = df_plat.loc[df_plat['Nombre'] == row['Producto'], 'Usa_Boveda'].values[0] == "Si"
+            
         if usa_boveda and ((st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")):
             disp = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
             if not disp.empty:
@@ -358,7 +392,9 @@ def nueva_venta_popup():
     
     st.divider()
     ca, cb = st.columns(2)
-    usa_boveda = df_plat.loc[df_plat['Nombre'] == prod, 'Usa_Boveda'].values[0] == "Si" if not df_plat.empty else False
+    usa_boveda = False
+    if not df_plat.empty and prod in df_plat['Nombre'].values:
+        usa_boveda = df_plat.loc[df_plat['Nombre'] == prod, 'Usa_Boveda'].values[0] == "Si"
     
     pv = ""
     if usa_boveda and ((st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")):
@@ -673,13 +709,13 @@ elif menu == "Mi Perfil" or menu == "Ajustes":
     st.header("⚙️ Ajustes Personales")
     with st.form("form_perfil"):
         st.subheader("Billetera Digital")
-        mi_yape = st.text_input("Número Yape / Plin (Se enviará a tus clientes)", value=mi_perfil['Yape'] if mi_perfil['Yape'] else mi_perfil['Telefono'])
+        mi_yape = st.text_input("Número Yape / Plin (Se enviará a tus clientes)", value=mi_perfil.get('Yape', mi_perfil.get('Telefono', '')))
         
         st.subheader("Mis Mensajes Auto-Generados")
         st.caption("Variables: `{cliente}`, `{producto}`, `{vencimiento}`, `{correo}`, `{password}`, `{yape}`")
-        pb = st.text_area("📨 Bienvenida / Accesos Nuevos", value=mi_perfil['P_Bienvenida'], height=80)
-        pr = st.text_area("🟠 Recordatorio", value=mi_perfil['P_Rec'], height=80)
-        pv = st.text_area("🔴 Cuenta Vencida", value=mi_perfil['P_Ven'], height=80)
+        pb = st.text_area("📨 Bienvenida / Accesos Nuevos", value=mi_perfil.get('P_Bienvenida', ''), height=80)
+        pr = st.text_area("🟠 Recordatorio", value=mi_perfil.get('P_Rec', ''), height=80)
+        pv = st.text_area("🔴 Cuenta Vencida", value=mi_perfil.get('P_Ven', ''), height=80)
         
         if st.form_submit_button("💾 Guardar Mi Perfil", type="primary", use_container_width=True):
             idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
@@ -706,6 +742,6 @@ elif menu == "Mi Perfil" or menu == "Ajustes":
         for idx, row in df_plat.iterrows():
             cp1, cp2, cp3 = st.columns([2, 1, 1], vertical_alignment="center")
             cp1.write(f"📺 {row['Nombre']}")
-            cp2.caption("🤖 Bóveda" if row['Usa_Boveda'] == "Si" else "✍️ Manual")
+            cp2.caption("🤖 Bóveda" if row.get('Usa_Boveda', 'No') == "Si" else "✍️ Manual")
             if cp3.button("🗑️", key=f"del_p_{row['Nombre']}", use_container_width=True):
                 df_plat = df_plat.drop(idx); save_df(df_plat, "Plataformas"); st.rerun()
