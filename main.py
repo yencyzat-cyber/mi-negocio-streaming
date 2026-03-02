@@ -14,16 +14,15 @@ from streamlit_cookies_controller import CookieController
 from streamlit_option_menu import option_menu
 
 # ==============================================================================
-# BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO (AQUÍ ESTÁ LA CORRECCIÓN)
+# BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO
 # ==============================================================================
-VERSION_APP = "4.1 (Auto-Migración y Textos Base)"
+VERSION_APP = "4.2 (Smart Vault & Multi-Payments)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
 
 st.set_page_config(page_title="NEXA-Stream", page_icon="🚀", layout="wide", initial_sidebar_state="collapsed")
 
-# INICIALIZAR TODAS LAS VARIABLES ANTES DE CUALQUIER OTRA COSA
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'user' not in st.session_state: st.session_state.user = ""
 if 'role' not in st.session_state: st.session_state.role = ""
@@ -131,9 +130,8 @@ def save_df(df, ws_name):
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
     get_sheet_records.clear() 
 
-# ----------------- INICIO DE AUTO-MIGRACIÓN -----------------
+# ----------------- INICIO DE AUTO-MIGRACIÓN V4.2 -----------------
 
-# 1. MIGRAR VENTAS Y PAPELERA
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio", "Notas"]
 df_ventas = load_df("Ventas", cols_ventas)
 migr_ventas = False
@@ -148,7 +146,6 @@ if migr_ex: save_df(df_ex_clientes, "ExClientes")
 
 df_inv = load_df("Inventario", ["Correo", "Password", "Usos", "Asignado_A"])
 
-# 2. MIGRAR PLATAFORMAS (Recuperar YouTube y columna Usa_Boveda)
 df_plat = load_df("Plataformas", ["Nombre", "Usa_Boveda"])
 migr_plat = False
 if "Usa_Boveda" not in df_plat.columns:
@@ -160,22 +157,20 @@ if "YouTube Premium" not in df_plat["Nombre"].values:
 if migr_plat: save_df(df_plat, "Plataformas")
 lista_plataformas = df_plat['Nombre'].tolist()
 
-# 3. MIGRAR USUARIOS Y TEXTOS BASE
-cols_usuarios = ["Usuario", "Password", "Rol", "Telefono", "Acceso_YT", "Yape", "P_Bienvenida", "P_Rec", "P_Ven", "Tema"]
+cols_usuarios = ["Usuario", "Password", "Rol", "Telefono", "Acceso_YT", "Datos_Pago", "P_Bienvenida", "P_Rec", "P_Ven", "Tema"]
 df_usuarios = load_df("Usuarios", cols_usuarios)
 migr_usr = False
 
-# PLANTILLAS BASE POR DEFECTO (Las que me pediste)
+# PLANTILLAS BASE CON LA VARIABLE {pagos}
 TXT_B = "¡Hola {cliente}! 🎉 Aquí tienes tus accesos nuevos de {producto}.\n\n📧 Correo: {correo}\n🔑 Clave: {password}\n📅 Vence el: {vencimiento}\n\n¡Disfruta tu servicio!"
-TXT_R = "Hola {cliente} ⏰, te recuerdo que tu cuenta de {producto} vencerá el {vencimiento}. ¿Deseas ir renovando para no perder el servicio?\n\nPuedes transferir o Yapear a este número: {yape}"
-TXT_V = "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO.\n\nPara reactivar tu servicio de inmediato, por favor envía la renovación a mi Yape/Plin: {yape}"
+TXT_R = "Hola {cliente} ⏰, te recuerdo que tu cuenta de {producto} vencerá el {vencimiento}. ¿Deseas ir renovando para no perder el servicio?\n\n💳 Puedes transferir o Yapear aquí:\n{pagos}"
+TXT_V = "🚨 Hola {cliente}, tu cuenta de {producto} ha VENCIDO.\n\nPara reactivar tu servicio de inmediato, por favor envía la renovación a:\n{pagos}"
 
 for col in cols_usuarios:
     if col not in df_usuarios.columns: 
         df_usuarios[col] = ""
         migr_usr = True
 
-# Llenar vacíos con las plantillas base
 for idx, row in df_usuarios.iterrows():
     modificado = False
     if not str(row.get('P_Bienvenida')).strip() or str(row.get('P_Bienvenida')).strip() == 'nan': 
@@ -184,12 +179,12 @@ for idx, row in df_usuarios.iterrows():
         df_usuarios.at[idx, 'P_Rec'] = TXT_R; modificado = True
     if not str(row.get('P_Ven')).strip() or str(row.get('P_Ven')).strip() == 'nan': 
         df_usuarios.at[idx, 'P_Ven'] = TXT_V; modificado = True
-    if not str(row.get('Yape')).strip() or str(row.get('Yape')).strip() == 'nan':
-        df_usuarios.at[idx, 'Yape'] = row.get('Telefono', ''); modificado = True
+    if not str(row.get('Datos_Pago')).strip() or str(row.get('Datos_Pago')).strip() == 'nan':
+        df_usuarios.at[idx, 'Datos_Pago'] = row.get('Telefono', ''); modificado = True
     if modificado: migr_usr = True
 
 if df_usuarios.empty:
-    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "", "Si", "", TXT_B, TXT_R, TXT_V, "Sistema"]], columns=cols_usuarios)
+    df_usuarios = pd.DataFrame([["admin", "admin123", "Admin", "", "Si", "Yape: 902028672", TXT_B, TXT_R, TXT_V, "Sistema"]], columns=cols_usuarios)
     migr_usr = True
 
 if migr_usr: save_df(df_usuarios, "Usuarios")
@@ -197,7 +192,7 @@ if migr_usr: save_df(df_usuarios, "Usuarios")
 df_auditoria = load_df("Auditoria", ["Fecha", "Usuario", "Accion", "Detalle"])
 
 # ==============================================================================
-# FUNCIONES DE APOYO (V4.0)
+# FUNCIONES DE APOYO Y MOTOR (V4.2)
 # ==============================================================================
 def registrar_auditoria(accion, detalle):
     global df_auditoria
@@ -225,14 +220,14 @@ def formatear_mes_anio(yyyy_mm):
     except: return yyyy_mm
 
 def procesar_plantilla(tipo, row_venta, mi_perfil):
-    yape = mi_perfil.get('Yape', mi_perfil.get('Telefono', ''))
+    pagos = mi_perfil.get('Datos_Pago', mi_perfil.get('Telefono', ''))
     if tipo == "Bienvenida": base = mi_perfil.get('P_Bienvenida', TXT_B)
     elif tipo == "Recordatorio": base = mi_perfil.get('P_Rec', TXT_R)
     else: base = mi_perfil.get('P_Ven', TXT_V)
         
     msj = str(base).replace("{cliente}", str(row_venta['Cliente'])).replace("{producto}", str(row_venta['Producto']))\
               .replace("{vencimiento}", str(row_venta['Vencimiento'])).replace("{correo}", str(row_venta['Correo']))\
-              .replace("{password}", str(row_venta['Pass'])).replace("{yape}", str(yape))
+              .replace("{password}", str(row_venta['Pass'])).replace("{pagos}", str(pagos))
     return f"https://wa.me/{row_venta['WhatsApp']}?text={quote(msj)}"
 
 # ==============================================================================
@@ -277,7 +272,6 @@ if not st.session_state.logged_in:
                     else: st.error("❌ Credenciales incorrectas.")
     st.stop()
 
-# Info del Perfil Actual
 mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
 
 # ==============================================================================
@@ -313,7 +307,7 @@ def mostrar_popup_alertas(df_urgente, hoy):
 
 @st.dialog("🔄 Renovar")
 def renovar_venta_popup(idx, row):
-    global df_ventas
+    global df_ventas, df_inv
     st.write(f"Renovando a: **{row['Cliente']}**")
     dur = st.radio("Plazo:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
     fecha_base = max(datetime.now().date(), pd.to_datetime(row['Vencimiento']).date()) 
@@ -325,12 +319,12 @@ def renovar_venta_popup(idx, row):
     tipo_cta = st.radio("Credenciales:", ["Mantener misma cuenta", "Asignar cuenta nueva"], horizontal=True)
     mv, pv = row['Correo'], row['Pass'] 
     
+    usa_boveda = False
+    if not df_plat.empty and row['Producto'] in df_plat['Nombre'].values:
+        usa_boveda = df_plat.loc[df_plat['Nombre'] == row['Producto'], 'Usa_Boveda'].values[0] == "Si"
+            
     if tipo_cta == "Asignar cuenta nueva":
         ca, cb = st.columns(2)
-        usa_boveda = False
-        if not df_plat.empty and row['Producto'] in df_plat['Nombre'].values:
-            usa_boveda = df_plat.loc[df_plat['Nombre'] == row['Producto'], 'Usa_Boveda'].values[0] == "Si"
-            
         if usa_boveda and ((st.session_state.role == "Admin") or (st.session_state.acceso_yt == "Si")):
             disp = df_inv[df_inv['Usos'] < 2].sort_values(by="Usos")
             if not disp.empty:
@@ -346,6 +340,18 @@ def renovar_venta_popup(idx, row):
     if st.button("CONFIRMAR RENOVACIÓN", type="primary", use_container_width=True):
         df_ventas.at[idx, 'Vencimiento'], df_ventas.at[idx, 'Correo'], df_ventas.at[idx, 'Pass'] = nueva_fecha, mv, pv
         save_df(df_ventas, "Ventas")
+        
+        # ACTUALIZACIÓN DE BÓVEDA AUTOMÁTICA
+        if tipo_cta == "Asignar cuenta nueva" and usa_boveda:
+            idx_inv = df_inv[df_inv['Correo'] == mv].index
+            if not idx_inv.empty:
+                df_inv.at[idx_inv[0], 'Usos'] = int(df_inv.at[idx_inv[0], 'Usos']) + 1
+                asig_previo = str(df_inv.at[idx_inv[0], 'Asignado_A'])
+                df_inv.at[idx_inv[0], 'Asignado_A'] = row['Cliente'] if asig_previo == "Nadie" else f"{asig_previo} | {row['Cliente']}"
+            else:
+                df_inv = pd.concat([df_inv, pd.DataFrame([[mv, pv, 1, row['Cliente']]], columns=df_inv.columns)], ignore_index=True)
+            save_df(df_inv, "Inventario")
+            
         registrar_auditoria("Renovación", f"Renovó cliente {row['Cliente']} por {dur}")
         st.session_state.toast_msg = "🔄 ¡Renovación exitosa!"; st.rerun()
 
@@ -374,7 +380,7 @@ def editar_venta_popup(idx, row):
 
 @st.dialog("➕ Nueva Venta")
 def nueva_venta_popup():
-    global df_ventas
+    global df_ventas, df_inv
     c1, c2 = st.columns(2)
     with c1: prod = st.selectbox("Plataforma", lista_plataformas)
     with c2: f_ini = st.date_input("Inicio", datetime.now())
@@ -417,14 +423,26 @@ def nueva_venta_popup():
         nueva = pd.DataFrame([[ "🟢", nom, limpiar_whatsapp(tel), prod, mv, pv, "nan", "nan", venc, st.session_state.user, costo, precio, notas ]], columns=df_ventas.columns)
         df_ventas = pd.concat([df_ventas, nueva], ignore_index=True)
         save_df(df_ventas, "Ventas")
+        
+        # ACTUALIZACIÓN DE BÓVEDA AUTOMÁTICA
+        if usa_boveda:
+            idx_inv = df_inv[df_inv['Correo'] == mv].index
+            if not idx_inv.empty:
+                df_inv.at[idx_inv[0], 'Usos'] = int(df_inv.at[idx_inv[0], 'Usos']) + 1
+                asig_previo = str(df_inv.at[idx_inv[0], 'Asignado_A'])
+                df_inv.at[idx_inv[0], 'Asignado_A'] = nom if asig_previo == "Nadie" else f"{asig_previo} | {nom}"
+            else:
+                # Si escribió uno manual, lo sumamos a la bóveda automáticamente
+                df_inv = pd.concat([df_inv, pd.DataFrame([[mv, pv, 1, nom]], columns=df_inv.columns)], ignore_index=True)
+            save_df(df_inv, "Inventario")
+
         registrar_auditoria("Venta Nueva", f"Creó venta de {prod} para {nom}")
         st.session_state.toast_msg = "🎉 ¡Venta registrada!"; st.rerun()
 
 # ==============================================================================
-# BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA (V4.0)
+# BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA (V4.2)
 # ==============================================================================
 
-# Calculo de Salud
 cupos_libres = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
 color_salud = "#00D26A" if cupos_libres > 2 else ("#FF9800" if cupos_libres > 0 else "#F44336")
 
@@ -462,8 +480,13 @@ menu = option_menu(
     }
 )
 
+if menu == "Salir":
+    cookies.remove('nexa_user_cookie') 
+    st.session_state.logged_in = False
+    st.rerun()
+
 # ==============================================================================
-# VISTAS PRINCIPALES V4.0
+# VISTAS PRINCIPALES V4.2
 # ==============================================================================
 
 if menu == "Ventas":
@@ -501,7 +524,7 @@ if menu == "Ventas":
 
     st.write("---")
 
-    # PAGINACIÓN V4.0
+    # PAGINACIÓN V4.2
     ITEMS_POR_PAGINA = 50
     total_items = len(df_mostrar)
     if total_items > 0:
@@ -550,7 +573,6 @@ if menu == "Ventas":
                     registrar_auditoria("Borrado", f"Envió a papelera a {row['Cliente']}")
                     st.rerun()
                     
-        # Controles de Paginación
         st.write("")
         cp1, cp2, cp3 = st.columns([1, 2, 1])
         with cp1:
@@ -641,8 +663,9 @@ elif menu == "Bóveda" or menu == "Inventario":
         with c_man:
             m = st.text_input("Gmail")
             p = st.text_input("Contraseña")
+            u = st.selectbox("Usos Actuales (0 = Nueva)", [0,1,2])
             if st.button("Guardar en Bóveda", type="primary", use_container_width=True):
-                df_inv = pd.concat([df_inv, pd.DataFrame([[m, p, 0, "Nadie"]], columns=df_inv.columns)], ignore_index=True)
+                df_inv = pd.concat([df_inv, pd.DataFrame([[m, p, u, "Nadie"]], columns=df_inv.columns)], ignore_index=True)
                 save_df(df_inv, "Inventario")
                 registrar_auditoria("Inventario", "Añadió correo manual a Bóveda")
                 st.rerun()
@@ -651,6 +674,7 @@ elif menu == "Bóveda" or menu == "Inventario":
     for idx, row in df_inv.iterrows():
         with st.container(border=True):
             st.write(f"📧 **{row['Correo']}** (Usos: {row['Usos']})")
+            st.caption(f"👥 Asignado a: {row['Asignado_A']}")
             c1, c2 = st.columns(2)
             with c2:
                 if st.button("🗑️ Eliminar", key=f"di_{idx}", use_container_width=True):
@@ -705,21 +729,22 @@ elif menu == "Auditoría":
     json_backup = json.dumps(backup_data, indent=2).encode('utf-8')
     st.download_button(label="📥 DESCARGAR BACKUP TOTAL", data=json_backup, file_name=f"Backup_NEXA_{datetime.now().date()}.json", mime='application/json', use_container_width=True)
 
-elif menu == "Mi Perfil" or menu == "Ajustes":
+elif menu == "Mi Perfil":
     st.header("⚙️ Ajustes Personales")
     with st.form("form_perfil"):
-        st.subheader("Billetera Digital")
-        mi_yape = st.text_input("Número Yape / Plin (Se enviará a tus clientes)", value=mi_perfil.get('Yape', mi_perfil.get('Telefono', '')))
+        st.subheader("💳 Mis Medios de Pago")
+        st.info("Escribe aquí todos tus métodos de pago. Esto reemplazará la variable {pagos} en tus mensajes.")
+        mi_pagos = st.text_area("Ej: Yape: 999... (Juan Perez) / Plin: 888...", value=mi_perfil.get('Datos_Pago', mi_perfil.get('Telefono', '')), height=80)
         
-        st.subheader("Mis Mensajes Auto-Generados")
-        st.caption("Variables: `{cliente}`, `{producto}`, `{vencimiento}`, `{correo}`, `{password}`, `{yape}`")
-        pb = st.text_area("📨 Bienvenida / Accesos Nuevos", value=mi_perfil.get('P_Bienvenida', ''), height=80)
-        pr = st.text_area("🟠 Recordatorio", value=mi_perfil.get('P_Rec', ''), height=80)
-        pv = st.text_area("🔴 Cuenta Vencida", value=mi_perfil.get('P_Ven', ''), height=80)
+        st.subheader("💬 Mis Mensajes Auto-Generados")
+        st.caption("Variables que puedes usar: `{cliente}`, `{producto}`, `{vencimiento}`, `{correo}`, `{password}`, `{pagos}`")
+        pb = st.text_area("📨 Bienvenida / Accesos Nuevos", value=mi_perfil.get('P_Bienvenida', ''), height=150)
+        pr = st.text_area("🟠 Recordatorio", value=mi_perfil.get('P_Rec', ''), height=150)
+        pv = st.text_area("🔴 Cuenta Vencida", value=mi_perfil.get('P_Ven', ''), height=150)
         
         if st.form_submit_button("💾 Guardar Mi Perfil", type="primary", use_container_width=True):
             idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
-            df_usuarios.at[idx_usr, 'Yape'] = mi_yape
+            df_usuarios.at[idx_usr, 'Datos_Pago'] = mi_pagos
             df_usuarios.at[idx_usr, 'P_Bienvenida'] = pb
             df_usuarios.at[idx_usr, 'P_Rec'] = pr
             df_usuarios.at[idx_usr, 'P_Ven'] = pv
