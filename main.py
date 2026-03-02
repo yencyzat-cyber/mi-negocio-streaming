@@ -16,7 +16,7 @@ import io
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO
 # ==============================================================================
-VERSION_APP = "4.4 (Bugfix: Sintaxis Global)"
+VERSION_APP = "4.5 (Pills UI, Custom Payments & Fixes)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -89,7 +89,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS
+# BLOQUE 3: CONEXIÓN A GOOGLE SHEETS Y AUTO-MIGRACIÓN
 # ==============================================================================
 @st.cache_resource
 def init_gsheets():
@@ -143,7 +143,6 @@ migr_ex = False
 if "Notas" not in df_ex_clientes.columns: df_ex_clientes["Notas"] = ""; migr_ex = True
 if migr_ex: save_df(df_ex_clientes, "ExClientes")
 
-# NUEVAS COLUMNAS EN INVENTARIO
 cols_inv = ["Correo", "Password", "Usos", "Asignado_A", "Last_Seller", "Vencimiento_Boveda"]
 df_inv = load_df("Inventario", cols_inv)
 migr_inv = False
@@ -203,7 +202,7 @@ if migr_usr: save_df(df_usuarios, "Usuarios")
 df_auditoria = load_df("Auditoria", ["Fecha", "Usuario", "Accion", "Detalle"])
 
 # ==============================================================================
-# FUNCIONES DE APOYO E INYECCIÓN
+# FUNCIONES DE APOYO Y EXCEL
 # ==============================================================================
 def registrar_auditoria(accion, detalle):
     global df_auditoria
@@ -233,10 +232,10 @@ def formatear_mes_anio(yyyy_mm):
 def procesar_plantilla(tipo, row_venta, mi_perfil):
     try:
         lista_pagos = json.loads(mi_perfil.get('Datos_Pago', '[]'))
-        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']} (Titular: {p['Titular']})" for p in lista_pagos if p.get('Activo', False)]
-        str_pagos = "\n".join(pagos_activos) if pagos_activos else "No especificó medios de pago."
+        pagos_activos = [f"✅ {p['Metodo']}: {p['Cuenta']} ({p['Titular']})" for p in lista_pagos if p.get('Activo', False)]
+        str_pagos = "\n".join(pagos_activos) if pagos_activos else "Consultar medio de pago."
     except:
-        str_pagos = "No especificó medios de pago."
+        str_pagos = "Consultar medio de pago."
 
     if tipo == "Bienvenida": base = mi_perfil.get('P_Bienvenida', TXT_B)
     elif tipo == "Recordatorio": base = mi_perfil.get('P_Rec', TXT_R)
@@ -249,7 +248,6 @@ def procesar_plantilla(tipo, row_venta, mi_perfil):
 
 def generar_backup_excel():
     output = io.BytesIO()
-    # Conversión a texto para evitar el bug de JSON y Fechas
     df_v = df_ventas.astype(str)
     df_i = df_inv.astype(str)
     df_u = df_usuarios.astype(str)
@@ -267,47 +265,10 @@ def generar_backup_excel():
     return output.getvalue()
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN 
-# ==============================================================================
-cookies = CookieController()
-usuario_guardado = cookies.get('nexa_user_cookie')
-
-if not st.session_state.logged_in and usuario_guardado:
-    match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
-    if not match.empty:
-        st.session_state.logged_in = True
-        st.session_state.user = match.iloc[0]['Usuario']
-        st.session_state.role = match.iloc[0]['Rol']
-        st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
-
-if not st.session_state.logged_in:
-    st.markdown("""<div style="text-align: center; margin-top: 50px;">
-        <h1 style="color: #00D26A; font-size: 50px; margin-bottom:0;">🚀 NEXA</h1>
-        <h3 style="margin-top:0; color:var(--text-color); letter-spacing: 4px;">STREAM</h3>
-    </div>""", unsafe_allow_html=True)
-    c_log1, c_log2, c_log3 = st.columns([1,2,1])
-    with c_log2:
-        with st.container(border=True):
-            with st.form("login_form"):
-                u_in = st.text_input("Usuario")
-                p_in = st.text_input("Contraseña", type="password")
-                ingresar = st.form_submit_button("Acceder", type="primary", use_container_width=True)
-                if ingresar:
-                    match = df_usuarios[(df_usuarios['Usuario'] == u_in) & (df_usuarios['Password'] == p_in)]
-                    if not match.empty:
-                        st.session_state.logged_in = True
-                        st.session_state.user = match.iloc[0]['Usuario']; st.session_state.role = match.iloc[0]['Rol']
-                        cookies.set('nexa_user_cookie', u_in); registrar_auditoria("Login", "Ingresó"); st.rerun()
-                    else: st.error("❌ Credenciales incorrectas.")
-    st.stop()
-
-mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
-
-# ==============================================================================
-# BLOQUE 5: DIÁLOGOS DE GESTIÓN (Pop-Ups)
+# BLOQUE 5: DIÁLOGOS DE GESTIÓN GLOBALES (Evitan el Error de Sintaxis)
 # ==============================================================================
 @st.dialog("⏰ Centro de Cobranza Urgente")
-def mostrar_popup_alertas(df_urgente, hoy):
+def mostrar_popup_alertas(df_urgente, hoy, perfil):
     global df_ventas, df_ex_clientes
     st.warning("⚠️ **ATENCIÓN:** Tienes clientes por vencer.")
     for idx, row in df_urgente.sort_values(by="Vencimiento").iterrows():
@@ -316,7 +277,7 @@ def mostrar_popup_alertas(df_urgente, hoy):
         elif dias <= 0: estado_txt, badge_col = "VENCIDO", "badge-red"
         else: estado_txt, badge_col = f"Vence en {dias} días", "badge-orange"
 
-        wa_url = procesar_plantilla("Vencido" if dias <= 0 else "Recordatorio", row, mi_perfil)
+        wa_url = procesar_plantilla("Vencido" if dias <= 0 else "Recordatorio", row, perfil)
         
         with st.container(border=True):
             st.markdown(f"""<div style="margin-bottom: 5px;"><h4 style="margin:0;">👤 {row['Cliente']}</h4></div>
@@ -329,14 +290,14 @@ def mostrar_popup_alertas(df_urgente, hoy):
                     df_ex_clientes = pd.concat([df_ex_clientes, pd.DataFrame([row])], ignore_index=True)
                     df_ventas = df_ventas.drop(idx)
                     save_df(df_ex_clientes, "ExClientes"); save_df(df_ventas, "Ventas")
-                    registrar_auditoria("Borrado", f"Envió a papelera cliente {row['Cliente']} ({row['Producto']})")
+                    registrar_auditoria("Borrado", f"Envió a papelera cliente {row['Cliente']}")
                     st.rerun()
     if st.button("Entendido, cerrar", type="primary", use_container_width=True):
         st.session_state.alertas_vistas = True; st.rerun()
 
 @st.dialog("🔄 Renovar")
 def renovar_venta_popup(idx, row):
-    global df_ventas, df_inv
+    global df_ventas, df_inv, df_plat
     st.write(f"Renovando a: **{row['Cliente']}**")
     dur = st.radio("Plazo:", ["1 Mes", "2 Meses", "6 Meses", "1 Año"], horizontal=True)
     fecha_base = max(datetime.now().date(), pd.to_datetime(row['Vencimiento']).date()) 
@@ -347,7 +308,6 @@ def renovar_venta_popup(idx, row):
     
     tipo_cta = st.radio("Credenciales:", ["Mantener misma cuenta", "Asignar cuenta nueva"], horizontal=True)
     mv, pv = row['Correo'], row['Pass'] 
-    
     usa_boveda = False
     if not df_plat.empty and row['Producto'] in df_plat['Nombre'].values:
         usa_boveda = df_plat.loc[df_plat['Nombre'] == row['Producto'], 'Usa_Boveda'].values[0] == "Si"
@@ -374,14 +334,14 @@ def renovar_venta_popup(idx, row):
             idx_inv = df_inv[df_inv['Correo'] == mv].index
             if not idx_inv.empty:
                 df_inv.at[idx_inv[0], 'Usos'] = int(df_inv.at[idx_inv[0], 'Usos']) + 1
-                asig_previo = str(df_inv.at[idx_inv[0], 'Asignado_A'])
-                df_inv.at[idx_inv[0], 'Asignado_A'] = row['Cliente'] if asig_previo == "Nadie" else f"{asig_previo} | {row['Cliente']}"
+                asig_p = str(df_inv.at[idx_inv[0], 'Asignado_A'])
+                df_inv.at[idx_inv[0], 'Asignado_A'] = row['Cliente'] if asig_p == "Nadie" else f"{asig_p} | {row['Cliente']}"
                 df_inv.at[idx_inv[0], 'Last_Seller'] = st.session_state.user
             else:
                 df_inv = pd.concat([df_inv, pd.DataFrame([[mv, pv, 1, row['Cliente'], st.session_state.user, ""]], columns=df_inv.columns)], ignore_index=True)
             save_df(df_inv, "Inventario")
             
-        registrar_auditoria("Renovación", f"Renovó cliente {row['Cliente']} por {dur}")
+        registrar_auditoria("Renovación", f"Renovó cliente {row['Cliente']}")
         st.session_state.toast_msg = "🔄 ¡Renovación exitosa!"; st.rerun()
 
 @st.dialog("📝 Editar Cliente")
@@ -398,7 +358,6 @@ def editar_venta_popup(idx, row):
     p = st.text_input("Pass", value=row['Pass'])
     perf = st.text_input("Perfil", value=row['Perfil'])
     notas = st.text_area("Notas Secretas", value=row.get('Notas', ''))
-    
     if st.button("ACTUALIZAR", type="primary", use_container_width=True):
         df_ventas.at[idx, 'Cliente'], df_ventas.at[idx, 'WhatsApp'], df_ventas.at[idx, 'Producto'], df_ventas.at[idx, 'Vencimiento'] = nom, limpiar_whatsapp(tel), prod, venc
         df_ventas.at[idx, 'Correo'], df_ventas.at[idx, 'Pass'], df_ventas.at[idx, 'Perfil'], df_ventas.at[idx, 'Costo'], df_ventas.at[idx, 'Precio'] = m, p, perf, costo, precio
@@ -409,7 +368,7 @@ def editar_venta_popup(idx, row):
 
 @st.dialog("➕ Nueva Venta")
 def nueva_venta_popup():
-    global df_ventas, df_inv
+    global df_ventas, df_inv, df_plat
     c1, c2 = st.columns(2)
     with c1: prod = st.selectbox("Plataforma", lista_plataformas)
     with c2: f_ini = st.date_input("Inicio", datetime.now())
@@ -457,8 +416,8 @@ def nueva_venta_popup():
             idx_inv = df_inv[df_inv['Correo'] == mv].index
             if not idx_inv.empty:
                 df_inv.at[idx_inv[0], 'Usos'] = int(df_inv.at[idx_inv[0], 'Usos']) + 1
-                asig_previo = str(df_inv.at[idx_inv[0], 'Asignado_A'])
-                df_inv.at[idx_inv[0], 'Asignado_A'] = nom if asig_previo == "Nadie" else f"{asig_previo} | {nom}"
+                asig_p = str(df_inv.at[idx_inv[0], 'Asignado_A'])
+                df_inv.at[idx_inv[0], 'Asignado_A'] = nom if asig_p == "Nadie" else f"{asig_p} | {nom}"
                 df_inv.at[idx_inv[0], 'Last_Seller'] = st.session_state.user
             else:
                 df_inv = pd.concat([df_inv, pd.DataFrame([[mv, pv, 1, nom, st.session_state.user, ""]], columns=df_inv.columns)], ignore_index=True)
@@ -467,55 +426,114 @@ def nueva_venta_popup():
         registrar_auditoria("Venta Nueva", f"Creó venta de {prod} para {nom}")
         st.session_state.toast_msg = "🎉 ¡Venta registrada!"; st.rerun()
 
+@st.dialog("Modificar Cuenta de Bóveda")
+def editar_boveda_popup(idx, row):
+    global df_inv
+    nP = st.text_input("Nueva Clave", value=row['Password'])
+    nU = st.selectbox("Usos (Cupos Ocupados)", [0,1,2], index=int(row['Usos']))
+    nA = st.text_input("Clientes Asignados", value=row['Asignado_A'])
+    if st.button("Actualizar Bóveda", type="primary", use_container_width=True):
+        df_inv.at[idx, 'Password'] = nP
+        df_inv.at[idx, 'Usos'] = nU
+        df_inv.at[idx, 'Asignado_A'] = nA
+        save_df(df_inv, "Inventario")
+        registrar_auditoria("Edición Bóveda", f"Editó usos de {row['Correo']}")
+        st.rerun()
+
+@st.dialog("Editar Vendedor")
+def editar_vendedor_popup(idx, row):
+    global df_usuarios
+    st.write(f"Editando a: **{row['Usuario']}**")
+    n_tel = st.text_input("Teléfono", value=row['Telefono'])
+    n_pwd = st.text_input("Nueva Contraseña", value=row['Password'])
+    n_acc = st.checkbox("✅ Acceso a Bóveda Auto", value=(row['Acceso_YT'] == 'Si'))
+    if st.button("Actualizar Permisos", type="primary", use_container_width=True):
+        df_usuarios.at[idx, 'Telefono'] = n_tel
+        df_usuarios.at[idx, 'Password'] = n_pwd
+        df_usuarios.at[idx, 'Acceso_YT'] = "Si" if n_acc else "No"
+        save_df(df_usuarios, "Usuarios")
+        st.session_state.toast_msg = "✅ Perfil actualizado."
+        st.rerun()
+
+@st.dialog("➕ Nuevo Medio de Pago")
+def nuevo_pago_popup(mis_pagos_actuales):
+    global df_usuarios
+    t_p = st.selectbox("Plataforma Bancaria", ["Yape", "Plin", "BCP", "BBVA", "Interbank", "Agora", "Transferencia", "Otro"])
+    
+    metodo_final = t_p
+    if t_p == "Otro":
+        metodo_final = st.text_input("Escribe el nombre del Banco/App", placeholder="Ej: PayPal, Zelle...")
+        
+    n_t = st.text_input("Nombre de Persona Titular", placeholder="Ej: Juan Perez")
+    n_c = st.text_input("Número (Celular o Cuenta Larga)", placeholder="Ej: 191-00000000000")
+    
+    if st.button("Guardar Método", type="primary", use_container_width=True):
+        if metodo_final and n_c:
+            nv_obj = {"Id": len(mis_pagos_actuales) + 1, "Titular": n_t, "Activo": True, "Metodo": metodo_final, "Cuenta": n_c}
+            mis_pagos_actuales.append(nv_obj)
+            idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
+            df_usuarios.at[idx_usr, 'Datos_Pago'] = json.dumps(mis_pagos_actuales)
+            save_df(df_usuarios, "Usuarios")
+            st.rerun()
+        else:
+            st.warning("Completa el nombre del método y el número.")
+
 # ==============================================================================
-# BLOQUE 6: ENCABEZADO Y MENÚ PÍLDORA
+# BLOQUE 4: SISTEMA DE LOGIN Y MENU PÍLDORA
 # ==============================================================================
+cookies = CookieController()
+usuario_guardado = cookies.get('nexa_user_cookie')
+
+if not st.session_state.logged_in and usuario_guardado:
+    match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
+    if not match.empty:
+        st.session_state.logged_in = True
+        st.session_state.user = match.iloc[0]['Usuario']
+        st.session_state.role = match.iloc[0]['Rol']
+        st.session_state.acceso_yt = match.iloc[0]['Acceso_YT']
+
+if not st.session_state.logged_in:
+    st.markdown("""<div style="text-align: center; margin-top: 50px;">
+        <h1 style="color: #00D26A; font-size: 50px; margin-bottom:0;">🚀 NEXA</h1>
+        <h3 style="margin-top:0; color:var(--text-color); letter-spacing: 4px;">STREAM</h3>
+    </div>""", unsafe_allow_html=True)
+    c_log1, c_log2, c_log3 = st.columns([1,2,1])
+    with c_log2:
+        with st.container(border=True):
+            with st.form("login_form"):
+                u_in = st.text_input("Usuario")
+                p_in = st.text_input("Contraseña", type="password")
+                ingresar = st.form_submit_button("Acceder", type="primary", use_container_width=True)
+                if ingresar:
+                    match = df_usuarios[(df_usuarios['Usuario'] == u_in) & (df_usuarios['Password'] == p_in)]
+                    if not match.empty:
+                        st.session_state.logged_in = True
+                        st.session_state.user = match.iloc[0]['Usuario']; st.session_state.role = match.iloc[0]['Rol']
+                        cookies.set('nexa_user_cookie', u_in); registrar_auditoria("Login", "Ingresó"); st.rerun()
+                    else: st.error("❌ Credenciales incorrectas.")
+    st.stop()
+
+mi_perfil = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].iloc[0]
+
 cupos_libres = len(df_inv[df_inv['Usos'] < 2]) if not df_inv.empty else 0
 color_salud = "#00D26A" if cupos_libres > 2 else ("#FF9800" if cupos_libres > 0 else "#F44336")
 
-st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0px 15px 0px; margin-bottom: 10px; border-bottom: 1px solid rgba(128,128,128,0.2);">
-        <div style="display: flex; align-items: center;">
-            <div style="width: 10px; height: 10px; background-color: {color_salud}; border-radius: 50%; margin-right: 10px; box-shadow: 0 0 8px {color_salud}; animation: pulse 2s infinite;"></div>
-            <h2 style="color:#00D26A; margin:0; padding:0; line-height: 1;">🚀 NEXA<span style="color:var(--text-color); font-size: 18px;">-Stream</span></h2>
-        </div>
-        <div style="text-align:right; color:var(--text-color); font-size: 13px; line-height: 1.2; opacity: 0.8;">
-            👤 <b>{st.session_state.user}</b> <br> <span style="font-size: 11px;">{st.session_state.role}</span>
-        </div>
+st.markdown(f"""<div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(128,128,128,0.2);">
+    <div style="display: flex; align-items: center;">
+        <div style="width: 10px; height: 10px; background-color: {color_salud}; border-radius: 50%; margin-right: 10px; box-shadow: 0 0 8px {color_salud};"></div>
+        <h2 style="color:#00D26A; margin:0;">🚀 NEXA<span style="color:var(--text-color); font-size: 18px;">-Stream</span></h2>
     </div>
-    <style>@keyframes pulse {{ 0% {{opacity: 1; transform: scale(1);}} 50% {{opacity: 0.5; transform: scale(1.2);}} 100% {{opacity: 1; transform: scale(1);}} }}</style>
-""", unsafe_allow_html=True)
+    <div style="text-align:right; font-size: 12px; opacity: 0.8;">👤 <b>{st.session_state.user}</b> <br> {st.session_state.role}</div>
+</div>""", unsafe_allow_html=True)
 
-if st.session_state.role == "Admin":
-    opciones_menu = ["Ventas", "Métricas", "Bóveda", "Equipo", "Auditoría", "Mi Perfil"]
-    iconos_menu = ["cart-check-fill", "bar-chart-fill", "safe", "people-fill", "eye-fill", "person-badge-fill"]
-else:
-    opciones_menu = ["Ventas", "Métricas", "Papelera", "Mi Perfil"]
-    iconos_menu = ["cart-check-fill", "bar-chart-fill", "trash3-fill", "person-badge-fill"]
+opciones_menu = ["Ventas", "Métricas", "Bóveda", "Equipo", "Auditoría", "Mi Perfil"] if st.session_state.role == "Admin" else ["Ventas", "Métricas", "Papelera", "Mi Perfil"]
+iconos_menu = ["cart-check-fill", "bar-chart-fill", "safe", "people-fill", "eye-fill", "person-badge-fill"] if st.session_state.role == "Admin" else ["cart-check-fill", "bar-chart-fill", "trash3-fill", "person-badge-fill"]
 
-menu = option_menu(
-    menu_title=None,
-    options=opciones_menu,
-    icons=iconos_menu,
-    default_index=0,
-    orientation="horizontal",
-    styles={
-        "container": {"padding": "5px", "background-color": "rgba(128,128,128,0.1)", "border": "1px solid rgba(128,128,128,0.2)", "border-radius": "50px", "margin-bottom": "20px"},
-        "icon": {"color": "#00D26A", "font-size": "15px"},
-        "nav-link": {"font-size": "12px", "text-align": "center", "margin": "0px 2px", "padding": "8px 10px", "--hover-color": "rgba(128,128,128,0.1)", "border-radius": "50px"},
-        "nav-link-selected": {"background-color": "#00D26A", "color": "white", "font-weight": "bold", "border-radius": "50px"},
-    }
-)
-
-if menu == "Salir":
-    cookies.remove('nexa_user_cookie') 
-    st.session_state.logged_in = False
-    st.rerun()
+menu = option_menu(menu_title=None, options=opciones_menu, icons=iconos_menu, default_index=0, orientation="horizontal", styles={"container": {"background-color": "rgba(128,128,128,0.1)", "border-radius": "50px"}, "nav-link-selected": {"background-color": "#00D26A"}})
 
 # ==============================================================================
-# VISTAS PRINCIPALES V4.4
+# VISTAS PRINCIPALES V4.5
 # ==============================================================================
-
 if menu == "Ventas":
     if st.session_state.role == "Admin":
         tipo_filtro = st.selectbox("👥 Filtro Vendedores:", ["🌎 Todos", "👥 Equipo", "👑 Mi Cuenta"], label_visibility="collapsed")
@@ -528,7 +546,7 @@ if menu == "Ventas":
     if not df_mostrar.empty:
         df_urgente = df_mostrar[pd.to_datetime(df_mostrar['Vencimiento']).dt.date <= hoy + timedelta(days=3)]
         if not st.session_state.alertas_vistas and not df_urgente.empty:
-            mostrar_popup_alertas(df_urgente, hoy)
+            mostrar_popup_alertas(df_urgente, hoy, mi_perfil)
         
     c1, c2 = st.columns([3, 1])
     with c1: 
@@ -672,6 +690,7 @@ elif menu == "Papelera":
                     save_df(df_ex_clientes, "ExClientes")
                     st.rerun()
 
+# BÓVEDA EN FORMATO PASTILLA (Imagen 12 Solucionada)
 elif menu == "Bóveda" or menu == "Inventario":
     registrar_auditoria("Vista Bóveda", "Abrió la Bóveda de Cuentas.")
     st.header("🤖 Bóveda Inteligente")
@@ -705,7 +724,6 @@ elif menu == "Bóveda" or menu == "Inventario":
     if df_inv.empty: 
         st.info("La bóveda está completamente vacía.")
     else:
-        # PAGINACIÓN BÓVEDA
         ITEMS_INV = 25
         t_inv = len(df_inv)
         t_pag_inv = (t_inv - 1) // ITEMS_INV + 1
@@ -716,15 +734,16 @@ elif menu == "Bóveda" or menu == "Inventario":
         for idx, row in df_mostrar_inv.iterrows():
             usos_restantes = 2 - int(pd.to_numeric(row['Usos'], errors='coerce'))
             badge_color = "badge-green" if usos_restantes > 0 else "badge-red"
-            texto_badge = f"{usos_restantes} Cupos Libres" if usos_restantes > 0 else "LLENA (0 Cupos)"
+            texto_badge = f"{usos_restantes} Cupos Libres" if usos_restantes > 0 else "LLENA"
             
             titulo_pastilla = f"📧 {row['Correo']} | 📊 Usos: {row['Usos']}"
             
+            # Formato de Pastilla Desplegable
             with st.expander(titulo_pastilla):
                 c_inf1, c_inf2 = st.columns(2)
                 with c_inf1:
                     st.write(f"🔑 Contraseña: **{row['Password']}**")
-                    st.caption(f"👥 Clientes Asignados: {row['Asignado_A']}")
+                    st.caption(f"👥 Clientes: {row['Asignado_A']}")
                 with c_inf2:
                     st.markdown(f"Status: <span class='badge {badge_color}'>{texto_badge}</span>", unsafe_allow_html=True)
                     st.caption(f"🧑‍🚀 Último Vendedor: {row['Last_Seller']}")
@@ -733,16 +752,7 @@ elif menu == "Bóveda" or menu == "Inventario":
                 cb1, cb2 = st.columns(2)
                 with cb1:
                     if st.button("📝 Editar", key=f"ei_{idx}", use_container_width=True): 
-                        @st.dialog("Modificar Cuenta de Bóveda")
-                        def edi(i_row, r_data):
-                            global df_inv
-                            nP = st.text_input("Nueva Clave", value=r_data['Password'])
-                            nU = st.selectbox("Usos (Cupos Ocupados)", [0,1,2], index=int(r_data['Usos']))
-                            nA = st.text_input("Clientes Asignados", value=r_data['Asignado_A'])
-                            if st.button("Actualizar"):
-                                df_inv.at[i_row, 'Password'] = nP; df_inv.at[i_row, 'Usos'] = nU; df_inv.at[i_row, 'Asignado_A'] = nA
-                                save_df(df_inv, "Inventario"); st.rerun()
-                        edi(idx, row)
+                        editar_boveda_popup(idx, row)
                 with cb2:
                     if st.button("🗑️ Eliminar", key=f"di_{idx}", use_container_width=True):
                         df_inv = df_inv.drop(idx); save_df(df_inv, "Inventario"); st.rerun()
@@ -775,8 +785,13 @@ elif menu == "Equipo":
         with st.container(border=True):
             st.write(f"🧑‍🚀 **{row['Usuario']}** | 📱 {row['Telefono']}")
             st.caption(f"🔑 Clave: {row['Password']} | 📺 Bóveda: **{row['Acceso_YT']}**")
-            if st.button("🗑️ Despedir", key=f"du_{idx}", use_container_width=True):
-                df_usuarios = df_usuarios.drop(idx); save_df(df_usuarios, "Usuarios"); st.rerun()
+            c_edit, c_del = st.columns(2)
+            with c_edit:
+                if st.button("📝 Ajustes", key=f"eu_{idx}", use_container_width=True): 
+                    editar_vendedor_popup(idx, row)
+            with c_del:
+                if st.button("🗑️ Despedir", key=f"du_{idx}", use_container_width=True):
+                    df_usuarios = df_usuarios.drop(idx); save_df(df_usuarios, "Usuarios"); st.rerun()
 
 elif menu == "Auditoría":
     registrar_auditoria("Vista Auditoría", "Revisó los Logs.")
@@ -816,8 +831,7 @@ elif menu == "Auditoría":
 elif menu == "Mi Perfil":
     st.header("⚙️ Ajustes Personales")
     
-    # PANEL DE PAGOS DINÁMICOS (Soluciona Imagen 11)
-    with st.expander("💳 MIS MEDIOS DE PAGO DINÁMICOS", expanded=True):
+    with st.expander("💳 MIS MEDIOS DE PAGO", expanded=True):
         st.info("Marca con ✔️ los que quieras usar. Puedes eliminar o añadir nuevos.")
         
         try: mis_pagos = json.loads(mi_perfil.get('Datos_Pago', '[]'))
@@ -849,20 +863,11 @@ elif menu == "Mi Perfil":
         else: st.caption("No tienes métodos de pago configurados.")
 
         st.write("")
-        if st.button("➕ AÑADIR OTRO MÉTODO DE PAGO", type="primary", use_container_width=True):
-            @st.dialog("Nuevo Medio de Pago")
-            def nuevo_pago_popup():
-                t_p = st.selectbox("Plataforma Bancaria", ["Yape", "Plin", "BCP", "BBVA", "Interbank", "Agora", "Transferencia", "Otro"])
-                n_t = st.text_input("Nombre de Persona Titular", placeholder="Ej: Juan Perez")
-                n_c = st.text_input("Número (Celular o Cuenta Larga)", placeholder="Ej: 191-00000000000")
-                if st.button("Guardar", type="primary", use_container_width=True):
-                    nv_obj = {"Id": len(mis_pagos) + 1, "Titular": n_t, "Activo": True, "Metodo": t_p, "Cuenta": n_c}
-                    mis_pagos.append(nv_obj)
-                    idx_usr = df_usuarios[df_usuarios['Usuario'] == st.session_state.user].index[0]
-                    df_usuarios.at[idx_usr, 'Datos_Pago'] = json.dumps(mis_pagos)
-                    save_df(df_usuarios, "Usuarios")
-                    st.rerun()
-            nuevo_pago_popup()
+        # BOTÓN CENTRADO Y PEQUEÑO (Resuelve Imagen 10)
+        col_btn_spacer1, col_btn_main, col_btn_spacer2 = st.columns([1, 2, 1])
+        with col_btn_main:
+            if st.button("➕ Añadir Medio de Pago", type="primary", use_container_width=True):
+                nuevo_pago_popup(mis_pagos)
 
     st.divider()
     with st.form("form_perfil"):
