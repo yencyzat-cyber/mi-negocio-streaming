@@ -16,7 +16,7 @@ from streamlit_option_menu import option_menu
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VERSIÓN
 # ==============================================================================
-VERSION_APP = "4.0 (Enterprise Edition)"
+VERSION_APP = "4.0.1 (Enterprise Edition - Fix)"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
@@ -119,7 +119,7 @@ def save_df(df, ws_name):
     ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name="A1")
     get_sheet_records.clear() 
 
-# --- CARGAR TABLAS MIGRANDO NUEVAS COLUMNAS (V4.0) ---
+# --- CARGAR TABLAS ---
 cols_ventas = ["Estado", "Cliente", "WhatsApp", "Producto", "Correo", "Pass", "Perfil", "PIN", "Vencimiento", "Vendedor", "Costo", "Precio", "Notas"]
 df_ventas = load_df("Ventas", cols_ventas)
 if "Notas" not in df_ventas.columns: df_ventas["Notas"] = ""
@@ -190,17 +190,25 @@ def procesar_plantilla(tipo, row_venta, mi_perfil):
     return f"https://wa.me/{row_venta['WhatsApp']}?text={quote(msj)}"
 
 # ==============================================================================
-# BLOQUE 4: SISTEMA DE LOGIN 
+# BLOQUE 4: SISTEMA DE LOGIN Y DECLARACIÓN DE VARIABLES
 # ==============================================================================
 cookies = CookieController()
 usuario_guardado = cookies.get('nexa_user_cookie')
 
+# ---- AQUI ESTÁN LAS 5 LÍNEAS RESTAURADAS QUE DABAN EL ERROR ----
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = ""
     st.session_state.role = ""
     st.session_state.acceso_yt = "No"
     st.session_state.alertas_vistas = False 
+
+if 'temp_emails' not in st.session_state: st.session_state.temp_emails = []
+if 'nuevo_vend_usr' not in st.session_state: st.session_state.nuevo_vend_usr = None
+if 'nuevo_vend_pwd' not in st.session_state: st.session_state.nuevo_vend_pwd = None
+if 'nuevo_vend_nom' not in st.session_state: st.session_state.nuevo_vend_nom = None
+if 'nuevo_vend_tel' not in st.session_state: st.session_state.nuevo_vend_tel = None
+# ------------------------------------------------------------------
 
 if not st.session_state.logged_in and usuario_guardado:
     match = df_usuarios[df_usuarios['Usuario'] == usuario_guardado]
