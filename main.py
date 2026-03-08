@@ -16,7 +16,7 @@ import io
 # ==============================================================================
 # BLOQUE 1: CONFIGURACIÓN Y VARIABLES DE ESTADO
 # ==============================================================================
-VERSION_APP = "4.7 (Perfect Pills & Clean UI)"
+VERSION_APP = "4.7"
 
 LINK_APP = "https://mi-negocio-streaming-chkfid6tmyepuartagxlrq.streamlit.app/" 
 NUMERO_ADMIN = "51902028672" 
